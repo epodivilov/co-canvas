@@ -1,0 +1,27 @@
+{
+  "name": "co-canvas",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Shared live whiteboard for AI agents and humans",
+  "license": "MIT",
+  "author": "Evgenii Podivilov",
+  "packageManager": "pnpm@10.30.2",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "format": "biome format --write .",
+    "check": "biome check . && pnpm -r typecheck"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.6",
+    "@types/node": "^26.1.2",
+    "tsdown": "^0.22.14",
+    "typescript": "^7.0.2"
+  }
+}

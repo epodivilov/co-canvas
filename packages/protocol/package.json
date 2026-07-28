@@ -1,0 +1,13 @@
+{
+  "name": "@co-canvas/protocol",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Shared types and helpers for co-canvas rooms and scene elements",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  }
+}
