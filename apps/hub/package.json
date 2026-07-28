@@ -1,0 +1,25 @@
+{
+  "name": "@co-canvas/hub-cli",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Command-line wrapper that runs the co-canvas hub as a standalone process",
+  "bin": {
+    "co-canvas-hub": "./dist/main.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "dev": "node --experimental-strip-types src/main.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@co-canvas/hub": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.2",
+    "tsdown": "^0.22.14"
+  }
+}

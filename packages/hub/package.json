@@ -1,0 +1,19 @@
+{
+  "name": "@co-canvas/hub",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "co-canvas hub as a library: rooms, sync and static assets, embeddable in-process",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@co-canvas/protocol": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.2"
+  }
+}
