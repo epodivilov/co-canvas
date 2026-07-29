@@ -1,6 +1,9 @@
 import type { IncomingHttpHeaders } from "node:http";
 import { request as httpRequest } from "node:http";
+import * as encoding from "lib0/encoding";
 import { WebSocket } from "ws";
+import type { Awareness } from "y-protocols/awareness";
+import { encodeAwarenessUpdate } from "y-protocols/awareness";
 import { WebsocketProvider } from "y-websocket";
 import * as Y from "yjs";
 
@@ -100,6 +103,11 @@ export function createClientPool() {
         close() {
           clients.delete(client);
           provider.destroy();
+          // Destroying the doc also destroys the awareness the provider built on
+          // it, which is the only thing that clears that awareness's keepalive
+          // interval. Without it a finished client leaves a timer behind and any
+          // measurement of what the hub itself still holds is noise.
+          doc.destroy();
         },
       };
       clients.add(client);
@@ -136,6 +144,70 @@ export function upgradeOutcome(baseUrl: string, path: string): Promise<UpgradeOu
       resolve(opened ? { kind: "closed", code } : { kind: "handshake-failed" });
     });
   });
+}
+
+export interface RawClient {
+  readonly socket: WebSocket;
+  /** Frames received so far, oldest first. */
+  readonly frames: Uint8Array[];
+  send(message: Uint8Array): void;
+  /** Forgets everything received so far, so a later assertion starts clean. */
+  clear(): void;
+  close(): void;
+}
+
+/**
+ * A WebSocket that says nothing on its own, so a test can drive the wire format
+ * by hand and see exactly which frames the hub sends back — something the
+ * `y-websocket` provider hides behind its own handshake.
+ */
+export async function openRawClient(baseUrl: string, path: string): Promise<RawClient> {
+  const socket = new WebSocket(`${baseUrl.replace(/^http/, "ws")}${path}`);
+  const frames: Uint8Array[] = [];
+  socket.on("message", (data: Buffer | ArrayBuffer | Buffer[]) => {
+    frames.push(toBytes(data));
+  });
+  // `ws` throws on an 'error' event with no listener, so one is always attached.
+  socket.on("error", () => {});
+  await new Promise<void>((resolve, reject) => {
+    socket.once("open", resolve);
+    socket.once("error", reject);
+  });
+
+  return {
+    socket,
+    frames,
+    send: (message) => socket.send(message),
+    clear: () => {
+      frames.length = 0;
+    },
+    close: () => socket.close(),
+  };
+}
+
+/** The hub's outer framing, which the raw-socket scenarios speak by hand. */
+export const MESSAGE_SYNC = 0;
+export const MESSAGE_AWARENESS = 1;
+
+/** Wraps a `y-protocols/sync` payload in the hub's outer message framing. */
+export function syncFrame(writePayload: (encoder: encoding.Encoder) => void): Uint8Array {
+  const encoder = encoding.createEncoder();
+  encoding.writeVarUint(encoder, MESSAGE_SYNC);
+  writePayload(encoder);
+  return encoding.toUint8Array(encoder);
+}
+
+/** Wraps a peer's current awareness state in the hub's outer message framing. */
+export function awarenessFrame(awareness: Awareness): Uint8Array {
+  const encoder = encoding.createEncoder();
+  encoding.writeVarUint(encoder, MESSAGE_AWARENESS);
+  encoding.writeVarUint8Array(encoder, encodeAwarenessUpdate(awareness, [awareness.clientID]));
+  return encoding.toUint8Array(encoder);
+}
+
+/** Counts the timers currently keeping this process's event loop alive. */
+export function activeTimers(): number {
+  return process.getActiveResourcesInfo().filter((resource) => resource === "Timeout").length;
 }
 
 /** Normalises whatever `ws` hands to a `message` listener into plain bytes. */

@@ -66,6 +66,35 @@ describe("static serving", () => {
     expect(response.body.toString("utf8")).not.toContain("root:");
   });
 
+  it("404s a traversal whose dot segments are percent-encoded (R5)", async () => {
+    const url = await startHub(fixtureDir);
+
+    // Undecoded this reads as an ordinary nested path: no segment is literally
+    // `..` and nothing about it begins with a dot, so it slips past a purely
+    // textual containment check. It only becomes a traversal after
+    // percent-decoding, which is the step this pins.
+    const response = await rawGet(url, "/assets/%2e%2e/%2e%2e/etc/passwd");
+
+    expect(response.status).toBe(404);
+    expect(response.body.toString("utf8")).not.toContain("root:");
+  });
+
+  it("keeps its own endpoints reachable behind a static directory (R5, R6)", async () => {
+    const url = await startHub(fixtureDir);
+
+    const health = await rawGet(url, "/health");
+    const rooms = await rawGet(url, "/__rooms");
+
+    // Both paths are extension-less, so an SPA fallback matched ahead of them
+    // would answer with index.html and the API would silently disappear.
+    expect(health.headers["content-type"]).toMatch(/application\/json/);
+    expect(JSON.parse(health.body.toString("utf8"))).toMatchObject({
+      service: "co-canvas-hub",
+    });
+    expect(rooms.headers["content-type"]).toMatch(/application\/json/);
+    expect(JSON.parse(rooms.body.toString("utf8"))).toEqual({ rooms: [] });
+  });
+
   it("404s every non-endpoint path when no static directory is configured (R5)", async () => {
     const url = await startHub();
 
