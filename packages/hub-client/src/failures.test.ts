@@ -81,4 +81,26 @@ describe("failures", () => {
     expect(error.message).toContain("/nonexistent/co-canvas-hub");
     expect((error.cause as NodeJS.ErrnoException | undefined)?.code).toBe("ENOENT");
   });
+
+  it("reports a command that is rejected before it is ever run (R6)", async () => {
+    const port = await freePort();
+
+    // An empty command is not an execution failure but an argument one, and it
+    // is raised synchronously rather than through the process's `error` event.
+    // The distinction is invisible to a caller and must not be: a hub command
+    // resolved from an environment variable that is set but empty arrives here,
+    // and it belongs in the same closed set of codes as everything else.
+    const error = await rejection(
+      findOrStartHub({
+        port,
+        dataDir: scenario.dataDir,
+        command: "",
+        env: { FAKE_HUB_LOG_DIR: scenario.logDir },
+      }),
+    );
+
+    expect(error.code).toBe("spawn-failed");
+    expect(error.cause).toBeInstanceOf(Error);
+    expect(await scenario.spawnedPids()).toEqual([]);
+  });
 });

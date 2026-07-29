@@ -188,20 +188,34 @@ async function startHub(options: FindOrStartHubOptions, survey: Survey): Promise
   const args = [...(options.args ?? [])];
   const description = [options.command, ...args].join(" ");
 
-  const child = spawn(options.command, args, {
-    detached: true,
-    // `detached` alone does not outlive this process: inherited or piped stdio
-    // ties the two together through file descriptors, and a referenced handle
-    // keeps this event loop alive. `ignore` is the safe choice while the hub has
-    // no log file of its own.
-    stdio: "ignore",
-    env: {
-      ...process.env,
-      ...options.env,
-      [HUB_PORT_ENV]: String(port),
-      [HUB_DATA_DIR_ENV]: survey.dataDir,
-    },
-  });
+  let child: ChildProcess;
+  try {
+    child = spawn(options.command, args, {
+      detached: true,
+      // `detached` alone does not outlive this process: inherited or piped stdio
+      // ties the two together through file descriptors, and a referenced handle
+      // keeps this event loop alive. `ignore` is the safe choice while the hub
+      // has no log file of its own.
+      stdio: "ignore",
+      env: {
+        ...process.env,
+        ...options.env,
+        [HUB_PORT_ENV]: String(port),
+        [HUB_DATA_DIR_ENV]: survey.dataDir,
+      },
+    });
+  } catch (error) {
+    // Not every refusal to run a command arrives through the `error` event: an
+    // argument `spawn` rejects out of hand — an empty command, most plausibly a
+    // hub command read from an environment variable that is set but blank —
+    // throws from this call instead. A caller cannot tell the two apart and
+    // should not have to, so both leave through the same code.
+    throw new HubClientError(
+      "spawn-failed",
+      `failed to start the hub with command \`${description}\``,
+      { cause: error },
+    );
+  }
   child.unref();
 
   const cancellation = { cancelled: false };
