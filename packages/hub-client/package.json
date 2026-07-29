@@ -1,0 +1,19 @@
+{
+  "name": "@co-canvas/hub-client",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Finds the running co-canvas hub or starts one, and owns the hub lockfile format",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@co-canvas/protocol": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.2"
+  }
+}
