@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { PROTOCOL_VERSION } from "@co-canvas/protocol";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { clearHubLock, hubLockPath, readHubLock, writeHubLock } from "./index.ts";
@@ -46,6 +46,9 @@ describe("lockfile", () => {
       "this is not json",
       "",
       JSON.stringify({ pid: 4242, protocol: PROTOCOL_VERSION, startedAt: "2026-07-29T00:00:00Z" }),
+      // A blank start time is a field that was written but says nothing, which
+      // is no more of a claim than a missing one.
+      JSON.stringify({ pid: 4242, port: 4321, protocol: PROTOCOL_VERSION, startedAt: "" }),
     ]) {
       await writeFile(path, contents, "utf8");
       // A half-written or hand-edited file means "no claim", not "crash the
@@ -62,5 +65,15 @@ describe("lockfile", () => {
 
     expect(existsSync(hubLockPath(scenario.dataDir))).toBe(false);
     expect(await readHubLock(scenario.dataDir)).toBeNull();
+  });
+
+  it("reports a lockfile it could not remove rather than pretending it did (R7)", async () => {
+    // A directory in the lockfile's place cannot be unlinked. Only absence is
+    // benign here: swallowing every error would let a hub that failed to give up
+    // its claim report a clean shutdown, and the next client would find a
+    // lockfile nobody stands behind.
+    await mkdir(hubLockPath(scenario.dataDir), { recursive: true });
+
+    await expect(clearHubLock(scenario.dataDir)).rejects.toThrow();
   });
 });

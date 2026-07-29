@@ -18,6 +18,7 @@
  */
 import { appendFileSync } from "node:fs";
 import { createServer } from "node:http";
+import { createServer as createSocketServer } from "node:net";
 import { join } from "node:path";
 import { writeHubLock } from "@co-canvas/hub-client";
 import { DEFAULT_HOST, HUB_SERVICE_ID, PROTOCOL_VERSION } from "@co-canvas/protocol";
@@ -61,8 +62,16 @@ function healthPayload() {
   return { service: HUB_SERVICE_ID, protocol: PROTOCOL_VERSION };
 }
 
-function serve() {
-  const server = createServer((request, response) => {
+function createModeServer() {
+  if (mode === "mute") {
+    // Accepts the connection and then says nothing at all, ever. This is the
+    // shape a probe without a timeout waits on forever, and the one thing an
+    // HTTP-level fixture cannot imitate.
+    return createSocketServer((socket) => {
+      socket.on("error", () => {});
+    });
+  }
+  return createServer((request, response) => {
     if (mode !== "not-found" && request.url === "/health") {
       response.writeHead(200, { "content-type": "application/json; charset=utf-8" });
       response.end(JSON.stringify(healthPayload()));
@@ -71,6 +80,10 @@ function serve() {
     response.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
     response.end("not found");
   });
+}
+
+function serve() {
+  const server = createModeServer();
 
   // Losing the port race is the designed outcome for every caller but one, so a
   // loser has to die quietly rather than hang around half-started.

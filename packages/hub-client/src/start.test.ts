@@ -70,4 +70,26 @@ describe("start", () => {
     const response = await fetch(`${outcome.stdout}/health`);
     expect(response.status).toBe(200);
   });
+
+  it("does not keep the calling process alive once it has answered (R2)", async () => {
+    const port = await freePort();
+    const startedAt = Date.now();
+
+    // This caller is forbidden from forcing its own exit, so it can only end by
+    // running out of work. The hub is meant to outlive it by hours, and a handle
+    // on that hub left referenced here would hold this process open for exactly
+    // as long — which the scenario above cannot see, because a hard exit tears
+    // the event loop down either way.
+    const outcome = await scenario.runCaller({
+      port,
+      dataDir: scenario.dataDir,
+      naturalExit: true,
+    });
+
+    expect(outcome.code).toBe(0);
+    expect(outcome.stdout).toBe(`http://${DEFAULT_HOST}:${port}`);
+    // Measured at around half a second; the bound is loose enough for a busy
+    // machine and far short of how long the hub itself lives.
+    expect(Date.now() - startedAt).toBeLessThan(10_000);
+  }, 20_000);
 });

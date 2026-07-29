@@ -22,10 +22,16 @@ const info = await findOrStartHub({
   },
 });
 
-// Exiting hard on purpose: the scenario that watches this process disappear is
-// asserting that the hub it started is not tied to it, and a hard exit is the
-// least forgiving version of that. It also skips the wait for the probe's
-// keep-alive socket to time out.
-process.stdout.write(`${info.url}\n`, () => {
-  process.exit(0);
-});
+if (process.env.CALLER_EXIT === "natural") {
+  // Falls off the end of its own event loop with nothing forcing the issue.
+  // This is the version that notices a child handle left referenced: the hub
+  // outlives its parent by an hour, and a parent still holding it would wait.
+  process.stdout.write(`${info.url}\n`);
+} else {
+  // A hard exit is the least forgiving version of the fd question — the parent
+  // vanishes without unwinding anything, so a hub sharing its stdio or its
+  // process group has no chance to be let go of gracefully.
+  process.stdout.write(`${info.url}\n`, () => {
+    process.exit(0);
+  });
+}

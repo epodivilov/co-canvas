@@ -15,6 +15,7 @@ export type FakeHubMode =
   | "foreign"
   | "protocol-999"
   | "not-found"
+  | "mute"
   | "never-bind"
   | "exit-nonzero";
 
@@ -149,6 +150,11 @@ interface RunCallerOptions {
   dataDir: string;
   mode?: FakeHubMode;
   logDir?: string;
+  /**
+   * Let the caller run off the end of its event loop instead of calling
+   * `process.exit`, so that anything the client left referenced holds it open.
+   */
+  naturalExit?: boolean;
 }
 
 export interface CallerOutcome {
@@ -276,6 +282,7 @@ export async function createScenario(): Promise<Scenario> {
             CO_CANVAS_DATA_DIR: options.dataDir,
             FAKE_HUB_MODE: options.mode ?? "healthy",
             FAKE_HUB_LOG_DIR: options.logDir ?? logDir,
+            CALLER_EXIT: options.naturalExit === true ? "natural" : "hard",
           },
         }),
       );

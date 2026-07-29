@@ -41,7 +41,18 @@ describe("conflicts", () => {
     await scenario.startFakeHub({ mode: "protocol-999", port });
 
     const error = await rejection(
-      findOrStartHub({ port, dataDir: scenario.dataDir, ...fakeHubCommand(scenario) }),
+      findOrStartHub({
+        ...fakeHubCommand(scenario),
+        port,
+        dataDir: scenario.dataDir,
+        // The command is a path that does not exist, and that is the assertion:
+        // an implementation that ran it before recognising the mismatch would
+        // answer `spawn-failed` instead. An empty `spawned.log` cannot make that
+        // distinction on its own here — a mismatch is caught on the very first
+        // poll, so a child would be signalled a few milliseconds after `spawn`
+        // and die before it ever reached the code that writes the log.
+        command: "/nonexistent/co-canvas-hub",
+      }),
     );
 
     expect(error.code).toBe("protocol-mismatch");
@@ -63,4 +74,27 @@ describe("conflicts", () => {
     expect(error.code).toBe("port-occupied");
     expect(await scenario.spawnedPids()).toEqual([]);
   });
+
+  it("gives up on a port that accepts the connection and never answers (R4)", async () => {
+    const port = await freePort();
+    await scenario.startFakeHub({ mode: "mute", port });
+
+    const startedAt = Date.now();
+    const error = await rejection(
+      findOrStartHub({
+        port,
+        dataDir: scenario.dataDir,
+        probeTimeoutMs: 300,
+        startupTimeoutMs: 2000,
+        ...fakeHubCommand(scenario),
+      }),
+    );
+
+    // A mute occupant cannot be recognised, so the client goes on to start a hub
+    // and that hub cannot have the port either. The point is not which error
+    // comes back but that one does: without a deadline on every probe, the very
+    // first request never returns and no caller ever hears back at all.
+    expect(error.code).toBe("start-failed");
+    expect(Date.now() - startedAt).toBeLessThan(10_000);
+  }, 20_000);
 });
