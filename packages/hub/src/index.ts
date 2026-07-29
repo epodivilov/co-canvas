@@ -153,6 +153,12 @@ export function createHub(options: HubOptions = {}): Hub {
     await new Promise<void>((resolve, reject) => {
       server.close((error) => (error ? reject(error) : resolve()));
     });
+
+    // Rooms go with the hub they belonged to. Each one owns an `Awareness` whose
+    // keepalive interval is cleared only by `destroy()`, so a hub that kept its
+    // rooms would release the port and still hold the event loop open: the CLI's
+    // Ctrl-C handler would appear to do nothing.
+    rooms.destroyAll();
     url = null;
   }
 
