@@ -49,13 +49,26 @@ export interface FindOrStartHubOptions extends FindHubOptions {
 /**
  * Environment variable naming the port a started hub must bind.
  *
- * The port is passed through the environment rather than through arguments
+ * The port travels through the environment rather than through arguments
  * because the caller owns the command line and its flag syntax is not this
  * package's to invent; CC-3 has to read this when it wires the hub process up.
+ *
+ * On the names: the `HUB_`-prefixed constant is an outsider talking *about* the
+ * hub, while the variable it holds is unprefixed because the hub reads it as a
+ * statement about itself. The same string is `CO_CANVAS_PORT` on both sides of
+ * the fork; only the vantage point differs.
+ *
+ * Both variables are written *over* the inherited environment, so a value the
+ * user happens to have exported in their shell does not reach the hub. That is
+ * deliberate — the port here is the one the caller asked for, or the default,
+ * and letting a stray shell variable redirect it would mean a caller that asked
+ * for a hub on one port silently getting one somewhere else. Moving the hub is
+ * the `port` option's job, and a CLI that wants an environment variable to do it
+ * should read that variable itself and pass it as the option.
  */
 export const HUB_PORT_ENV = "CO_CANVAS_PORT";
 
-/** Environment variable naming the data directory a started hub must use. */
+/** Environment variable naming the data directory a started hub must use. See {@link HUB_PORT_ENV}. */
 export const HUB_DATA_DIR_ENV = "CO_CANVAS_DATA_DIR";
 
 /** How long a started process has to answer as a healthy hub. */
@@ -338,11 +351,19 @@ async function stopChild(child: ChildProcess): Promise<void> {
   await Promise.race([exited, sleep(TERMINATE_GRACE_MS)]);
 }
 
+/**
+ * Worded for both entry points: probing and starting differ in what they were
+ * about to do, but not in what they found, and telling a caller that only asked
+ * a question to "free the port for the hub" would describe a bind it never
+ * intended. What is true either way is that there is no usable hub there and
+ * that this package will not go looking on another port by itself.
+ */
 function portOccupied(port: number): HubClientError {
   return new HubClientError(
     "port-occupied",
-    `port ${port} is held by a service that does not answer /health as a co-canvas hub;` +
-      " free that port or name another one with the `port` option",
+    `no co-canvas hub on port ${port}: it is held by a service that does not answer /health` +
+      " as one, and co-canvas never falls back to a different port." +
+      " Free that port, or name the one to use with the `port` option",
   );
 }
 
