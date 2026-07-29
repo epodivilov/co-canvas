@@ -3,14 +3,19 @@ import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { isRoomSlug, PROTOCOL_VERSION } from "@co-canvas/protocol";
+import type { HubHealth } from "@co-canvas/protocol";
+import {
+  DATA_DIR_NAME,
+  DEFAULT_HOST,
+  DEFAULT_PORT,
+  HUB_SERVICE_ID,
+  isRoomSlug,
+  PROTOCOL_VERSION,
+} from "@co-canvas/protocol";
 import { WebSocketServer } from "ws";
 import { createRoomRegistry } from "./rooms";
 import { createStaticHandler } from "./static-files";
 import { attachConnection } from "./sync";
-
-export const DEFAULT_PORT = 4321;
-export const DEFAULT_HOST = "127.0.0.1";
 
 /** WebSocket paths under this prefix address a room. Nothing else upgrades. */
 const SYNC_PREFIX = "/sync/";
@@ -49,7 +54,7 @@ export interface Hub {
 }
 
 function defaultDataDir(): string {
-  return join(homedir(), ".co-canvas");
+  return join(homedir(), DATA_DIR_NAME);
 }
 
 /**
@@ -88,8 +93,9 @@ export function createHub(options: HubOptions = {}): Hub {
 
     // Lets hub-client tell our hub apart from whatever else grabbed the port.
     if (pathname === "/health") {
+      const health: HubHealth = { service: HUB_SERVICE_ID, protocol: PROTOCOL_VERSION };
       response.writeHead(200, { "content-type": "application/json; charset=utf-8" });
-      response.end(JSON.stringify({ service: "co-canvas-hub", protocol: PROTOCOL_VERSION }));
+      response.end(JSON.stringify(health));
       return;
     }
 
