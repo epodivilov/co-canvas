@@ -166,7 +166,9 @@ function handleMessage(room: Room, connection: Connection, message: Uint8Array):
 
 function send(connection: Connection, message: Uint8Array): void {
   const { socket } = connection;
-  if (socket.readyState !== WebSocket.CONNECTING && socket.readyState !== WebSocket.OPEN) {
+  // `handleUpgrade` only ever hands over an already-open socket, so anything
+  // other than OPEN means the peer is on its way out.
+  if (socket.readyState !== WebSocket.OPEN) {
     socket.close();
     return;
   }
