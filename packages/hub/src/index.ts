@@ -34,7 +34,13 @@ export interface HubOptions {
 export interface Hub {
   /** Starts listening and resolves with the base URL. Idempotent. */
   start(): Promise<string>;
-  /** Stops listening and disconnects every peer. Idempotent. */
+  /**
+   * Stops listening, disconnects every peer and discards every room. Idempotent.
+   *
+   * Rooms do not survive a stop: their contents are held in memory only, and the
+   * `Awareness` each one owns holds a timer that would otherwise keep the host
+   * process alive. A hub started again serves empty rooms.
+   */
   stop(): Promise<void>;
   /** Base URL while running, `null` otherwise. */
   readonly url: string | null;
