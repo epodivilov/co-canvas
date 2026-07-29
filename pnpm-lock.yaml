@@ -106,6 +106,16 @@ importers:
         specifier: ^3.0.0
         version: 3.0.0(yjs@13.6.31)
 
+  packages/hub-client:
+    dependencies:
+      '@co-canvas/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+    devDependencies:
+      '@types/node':
+        specifier: ^26.1.2
+        version: 26.1.2
+
   packages/protocol: {}
 
 packages:
