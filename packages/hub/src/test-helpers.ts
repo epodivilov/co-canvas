@@ -1,5 +1,9 @@
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import type { IncomingHttpHeaders } from "node:http";
 import { request as httpRequest } from "node:http";
+import { createServer } from "node:net";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import * as encoding from "lib0/encoding";
 import { WebSocket } from "ws";
 import type { Awareness } from "y-protocols/awareness";
@@ -208,6 +212,206 @@ export function awarenessFrame(awareness: Awareness): Uint8Array {
 /** Counts the timers currently keeping this process's event loop alive. */
 export function activeTimers(): number {
   return process.getActiveResourcesInfo().filter((resource) => resource === "Timeout").length;
+}
+
+/** Long enough for any honest `stop()`, short enough to beat vitest's hook timeout. */
+export const STOP_BUDGET_MS = 8000;
+
+/**
+ * Stops every hub, and rejects rather than hanging when one will not settle.
+ *
+ * A bare `await hub.stop()` on a hub that never resolves expires as an
+ * anonymous hook timeout, and takes the directory cleanup in the `finally` down
+ * with it. Rejecting on a budget of our own still fails the hook — a hub that
+ * cannot stop is a defect either way, so nothing stops being detected — but it
+ * says which hub and how long it waited, and it lets the cleanup run. Every hub
+ * is attempted before the first failure is rethrown, so one stuck hub does not
+ * strand the others.
+ */
+export async function stopHubs(
+  hubs: Iterable<{ stop(): Promise<void>; readonly url: string | null }>,
+  timeoutMs = STOP_BUDGET_MS,
+): Promise<void> {
+  let failure: unknown = null;
+
+  for (const hub of hubs) {
+    const target = hub.url ?? "a hub that was not listening";
+    let timer: NodeJS.Timeout | null = null;
+    const expiry = new Promise<never>((_, reject) => {
+      timer = setTimeout(
+        () => reject(new Error(`stop() on ${target} did not settle within ${timeoutMs}ms`)),
+        timeoutMs,
+      );
+    });
+
+    try {
+      await Promise.race([hub.stop(), expiry]);
+    } catch (error) {
+      failure ??= error;
+    } finally {
+      if (timer !== null) clearTimeout(timer);
+    }
+  }
+
+  if (failure !== null) throw failure;
+}
+
+/**
+ * Hands out throwaway data directories and removes them afterwards.
+ *
+ * Every hub in the suite needs one: without an explicit `dataDir` a hub falls
+ * back to `~/.co-canvas`, so running the tests would write into the developer's
+ * real home directory and collide with a hub they actually use.
+ */
+export function createDataDirPool() {
+  const dirs: string[] = [];
+
+  return {
+    async create(): Promise<string> {
+      const dir = await mkdtemp(join(tmpdir(), "co-canvas-hub-"));
+      dirs.push(dir);
+      return dir;
+    },
+    async removeAll(): Promise<void> {
+      for (const dir of dirs.splice(0)) await rm(dir, { recursive: true, force: true });
+    },
+  };
+}
+
+/** Asks the OS for a port, gives it straight back and reports which one it was. */
+export function freePort(): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const probe = createServer();
+    probe.on("error", reject);
+    probe.listen(0, "127.0.0.1", () => {
+      const address = probe.address();
+      const port = typeof address === "object" && address !== null ? address.port : 0;
+      probe.close(() => (port === 0 ? reject(new Error("no port")) : resolve(port)));
+    });
+  });
+}
+
+// The on-disk log format, decoded here independently of the code under test so
+// that a bug in the codec cannot make its own tests pass. Kept in sync with the
+// layout the spec fixes: `CCLOG`, a version byte, a big-endian u64 creation
+// timestamp, then big-endian u32 length-prefixed Yjs updates.
+export const LOG_MAGIC = "CCLOG";
+export const LOG_HEADER_BYTES = 14;
+
+export interface DecodedLog {
+  magic: string;
+  version: number;
+  createdAt: number;
+  frames: Buffer[];
+  /** Bytes after the last complete frame — a torn tail, if the file has one. */
+  trailing: number;
+  bytes: number;
+}
+
+export function decodeLog(bytes: Buffer): DecodedLog {
+  if (bytes.length < LOG_HEADER_BYTES) throw new Error(`log too short: ${bytes.length} bytes`);
+  const frames: Buffer[] = [];
+  let offset = LOG_HEADER_BYTES;
+  for (;;) {
+    if (offset + 4 > bytes.length) break;
+    const length = bytes.readUInt32BE(offset);
+    if (offset + 4 + length > bytes.length) break;
+    frames.push(bytes.subarray(offset + 4, offset + 4 + length));
+    offset += 4 + length;
+  }
+  return {
+    magic: bytes.subarray(0, 5).toString("ascii"),
+    version: bytes.readUInt8(5),
+    createdAt: Number(bytes.readBigUInt64BE(6)),
+    frames,
+    trailing: bytes.length - offset,
+    bytes: bytes.length,
+  };
+}
+
+/** Builds a log file's bytes, so a scenario can put damaged input on disk. */
+export function encodeLog(createdAt: number, frames: readonly Uint8Array[]): Buffer {
+  const header = Buffer.alloc(LOG_HEADER_BYTES);
+  header.write(LOG_MAGIC, 0, "ascii");
+  header.writeUInt8(1, 5);
+  header.writeBigUInt64BE(BigInt(createdAt), 6);
+  const parts = [header];
+  for (const frame of frames) {
+    const prefix = Buffer.alloc(4);
+    prefix.writeUInt32BE(frame.byteLength, 0);
+    parts.push(prefix, Buffer.from(frame));
+  }
+  return Buffer.concat(parts);
+}
+
+export function logPath(dataDir: string, slug: string): string {
+  return join(dataDir, "rooms", `${slug}.log`);
+}
+
+export async function readLog(dataDir: string, slug: string): Promise<DecodedLog> {
+  return decodeLog(await readFile(logPath(dataDir, slug)));
+}
+
+/** The `board` map a log's frames add up to, as a plain object. */
+export function logBoard(log: DecodedLog): Record<string, unknown> {
+  const doc = new Y.Doc();
+  try {
+    for (const frame of log.frames) Y.applyUpdate(doc, frame);
+    return doc.getMap("board").toJSON();
+  } finally {
+    doc.destroy();
+  }
+}
+
+export interface IndexEntry {
+  slug: string;
+  createdAt: number;
+  updatedAt: number;
+  bytes: number;
+}
+
+export function indexPath(dataDir: string): string {
+  return join(dataDir, "rooms.json");
+}
+
+/** Reads `rooms.json` as the overview UI eventually will. */
+export async function readIndex(dataDir: string): Promise<IndexEntry[]> {
+  const parsed: unknown = JSON.parse(await readFile(indexPath(dataDir), "utf8"));
+  const rooms = (parsed as { rooms?: unknown }).rooms;
+  if (!Array.isArray(rooms)) throw new Error(`rooms.json holds no room list: ${String(rooms)}`);
+  return rooms as IndexEntry[];
+}
+
+interface LiveRoom {
+  slug: string;
+  peers: number;
+  docBytes: number;
+}
+
+/** What `/__rooms` reports, i.e. the rooms the hub is holding in memory. */
+export async function liveRooms(baseUrl: string): Promise<LiveRoom[]> {
+  const body = (await getJson(baseUrl, "/__rooms")) as { rooms: LiveRoom[] };
+  return body.rooms;
+}
+
+/** Size of a live room's document, or `0` when the hub is not holding it. */
+export async function roomDocBytes(baseUrl: string, slug: string): Promise<number> {
+  return (await liveRooms(baseUrl)).find((room) => room.slug === slug)?.docBytes ?? 0;
+}
+
+/** Records the update events a sequence of edits produces, one entry per edit. */
+export function recordUpdates(edits: readonly ((doc: Y.Doc) => void)[]): Uint8Array[] {
+  const doc = new Y.Doc();
+  const updates: Uint8Array[] = [];
+  const collect = (update: Uint8Array) => updates.push(update);
+  doc.on("update", collect);
+  try {
+    for (const edit of edits) edit(doc);
+    return updates;
+  } finally {
+    doc.off("update", collect);
+    doc.destroy();
+  }
 }
 
 /** Normalises whatever `ws` hands to a `message` listener into plain bytes. */

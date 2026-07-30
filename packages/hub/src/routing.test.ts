@@ -1,21 +1,35 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Hub } from "./index";
 import { createHub } from "./index";
-import { createClientPool, getJson, upgradeOutcome, waitFor } from "./test-helpers";
+import {
+  createClientPool,
+  createDataDirPool,
+  getJson,
+  stopHubs,
+  upgradeOutcome,
+  waitFor,
+} from "./test-helpers";
 
 describe("websocket routing", () => {
   const clients = createClientPool();
+  const dataDirs = createDataDirPool();
   let hub: Hub;
   let url: string;
 
   beforeEach(async () => {
-    hub = createHub({ port: 0 });
+    hub = createHub({ port: 0, dataDir: await dataDirs.create() });
     url = await hub.start();
   });
 
   afterEach(async () => {
     clients.closeAll();
-    await hub.stop();
+    try {
+      await stopHubs([hub]);
+    } finally {
+      // Unconditional: a scenario that failed with a hub mid-flush would
+      // otherwise leave its directory behind in the OS temp dir forever.
+      await dataDirs.removeAll();
+    }
   });
 
   it("refuses the handshake for a path outside the sync prefix (R4)", async () => {

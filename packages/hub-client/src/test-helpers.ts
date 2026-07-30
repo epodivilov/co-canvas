@@ -141,8 +141,18 @@ interface StartFakeHubOptions {
   logDir?: string;
   /** Wait until the port is accepting connections. Off for the non-binding modes. */
   awaitListening?: boolean;
-  /** Delay the bind, so the hub can be made to arrive at a chosen moment. */
-  bindDelayMs?: number;
+  /**
+   * Hold the bind until the process last named in this pid log has exited, so
+   * the hub can be made to arrive after a chosen moment.
+   *
+   * Deliberately not a delay in milliseconds. Ordering one process's bind after
+   * another's death by wall clock is a bet on how long two unrelated Node
+   * processes take to boot, which is the loosest quantity in any of these
+   * scenarios and the one a busy machine stretches first. Waiting on the pid
+   * makes the ordering hold by construction instead, and leaves the whole of
+   * whatever budget the code under test allows.
+   */
+  bindAfterExit?: string;
 }
 
 interface RunCallerOptions {
@@ -241,7 +251,7 @@ export async function createScenario(): Promise<Scenario> {
             FAKE_HUB_LOG_DIR: options.logDir ?? ambientLogDir,
             CO_CANVAS_PORT: String(options.port),
             CO_CANVAS_DATA_DIR: options.dataDir ?? dataDir,
-            FAKE_HUB_BIND_DELAY_MS: String(options.bindDelayMs ?? 0),
+            FAKE_HUB_BIND_AFTER_EXIT: options.bindAfterExit ?? "",
           },
         }),
       );

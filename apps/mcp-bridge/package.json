@@ -16,9 +16,16 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@co-canvas/protocol": "workspace:*"
+    "@co-canvas/hub-cli": "workspace:*",
+    "@co-canvas/hub-client": "workspace:*",
+    "@co-canvas/protocol": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "y-websocket": "^3.0.0",
+    "yjs": "^13.6.31",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@co-canvas/hub": "workspace:*",
     "@types/node": "^26.1.2",
     "tsdown": "^0.22.14"
   }

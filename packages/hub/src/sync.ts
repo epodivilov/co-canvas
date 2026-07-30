@@ -35,6 +35,12 @@ export interface Room {
   readonly doc: Y.Doc;
   readonly awareness: Awareness;
   readonly connections: Set<Connection>;
+  /**
+   * Called after a peer joins or leaves. The registry arms and disarms idle
+   * eviction from it, which is why the room reports the change rather than the
+   * registry polling for it.
+   */
+  readonly onPeersChanged: ((room: Room) => void) | null;
 }
 
 /**
@@ -43,7 +49,10 @@ export interface Room {
  * Both listeners are registered once per room rather than per connection, so
  * the cost of an extra peer is one `Set` entry.
  */
-export function createRoom(slug: RoomSlug): Room {
+export function createRoom(
+  slug: RoomSlug,
+  onPeersChanged: ((room: Room) => void) | null = null,
+): Room {
   const doc = new Y.Doc();
   const awareness = new Awareness(doc);
   // `Awareness` publishes an empty local state on construction. The hub is not
@@ -51,7 +60,7 @@ export function createRoom(slug: RoomSlug): Room {
   awareness.setLocalState(null);
 
   const connections = new Set<Connection>();
-  const room: Room = { slug, doc, awareness, connections };
+  const room: Room = { slug, doc, awareness, connections, onPeersChanged };
 
   doc.on("update", (update: Uint8Array, origin: unknown) => {
     const encoder = encoding.createEncoder();
@@ -100,6 +109,7 @@ export function createRoom(slug: RoomSlug): Room {
 export function attachConnection(room: Room, socket: WebSocket): void {
   const connection: Connection = { socket, controlledIds: new Set() };
   room.connections.add(connection);
+  room.onPeersChanged?.(room);
 
   socket.on("message", (data: Buffer | ArrayBuffer | Buffer[]) => {
     handleMessage(room, connection, toBytes(data));
@@ -111,6 +121,7 @@ export function attachConnection(room: Room, socket: WebSocket): void {
     // the retraction is broadcast to everyone still in the room.
     removeAwarenessStates(room.awareness, [...connection.controlledIds], null);
     connection.controlledIds.clear();
+    room.onPeersChanged?.(room);
   });
 
   socket.on("error", () => {
