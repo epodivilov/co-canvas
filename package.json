@@ -17,6 +17,7 @@
     "lint:fix": "biome check --write .",
     "format": "biome format --write .",
     "test": "vitest run",
+    "test:e2e": "pnpm --filter @co-canvas/web test:e2e",
     "check": "biome check . && pnpm -r typecheck && pnpm test"
   },
   "devDependencies": {
@@ -25,5 +26,12 @@
     "tsdown": "^0.22.14",
     "typescript": "^7.0.2",
     "vitest": "^4.1.10"
+  },
+  "pnpm": {
+    "peerDependencyRules": {
+      "allowedVersions": {
+        "y-excalidraw>@excalidraw/excalidraw": "*"
+      }
+    }
   }
 }
