@@ -1,4 +1,5 @@
 import type { RoomSlug } from "@co-canvas/protocol";
+import { ASSETS_KEY, ELEMENTS_KEY } from "@co-canvas/protocol";
 import { WebsocketProvider } from "y-websocket";
 import * as Y from "yjs";
 import { currentHubUrlSources, resolveSyncUrl } from "./hub-url";
@@ -45,8 +46,8 @@ export interface RoomConnection {
  */
 export function createRoomConnection(slug: RoomSlug): RoomConnection {
   const doc = new Y.Doc();
-  const yElements = doc.getArray<Y.Map<unknown>>("elements");
-  const yAssets = doc.getMap<unknown>("assets");
+  const yElements = doc.getArray<Y.Map<unknown>>(ELEMENTS_KEY);
+  const yAssets = doc.getMap<unknown>(ASSETS_KEY);
 
   // Counted here rather than read off `wsUnsuccessfulReconnects`: that counter
   // resets on every `onopen` and only advances for a socket that never

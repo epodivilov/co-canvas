@@ -63,9 +63,12 @@ describe("hub acquisition", () => {
     // The session itself is still usable, which a dead server could not manage.
     const tools = await bridge.client.listTools();
     expect(tools.tools.map((tool) => tool.name).sort()).toEqual([
+      "add_elements",
       "create_room",
+      "delete_elements",
       "list_rooms",
       "open_room",
+      "update_elements",
     ]);
   }, 20_000);
 
@@ -106,6 +109,6 @@ describe("hub acquisition", () => {
     const second = await bridge.call("list_rooms");
     expect(second.isError).toBe(true);
     const tools = await bridge.client.listTools();
-    expect(tools.tools).toHaveLength(3);
+    expect(tools.tools).toHaveLength(6);
   }, 20_000);
 });
