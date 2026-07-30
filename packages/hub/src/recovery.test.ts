@@ -17,6 +17,7 @@ import {
   readLog,
   recordUpdates,
   roomDocBytes,
+  stopHubs,
   waitFor,
 } from "./test-helpers";
 
@@ -104,7 +105,7 @@ describe("recovery", () => {
   afterEach(async () => {
     clients.closeAll();
     try {
-      for (const created of hubs) await created.stop();
+      await stopHubs(hubs);
     } finally {
       hubs.clear();
       // Unconditional: a scenario that failed with a hub mid-flush would
@@ -156,6 +157,34 @@ describe("recovery", () => {
     expect(await quarantineFiles(dataDir, "alpha")).toEqual([]);
     // The board still exists, so the overview still knows about it.
     expect((await readIndex(dataDir)).map((entry) => entry.slug)).toEqual(["alpha"]);
+  });
+
+  it("serves every other board while one of them is refused (R4)", async () => {
+    const [first, second] = threeUpdates();
+    const dataDir = await dataDirs.create();
+    const future = encodeLog(CREATED_AT, [first, second]);
+    future.writeUInt8(LOG_VERSION + 1, 5);
+    await seed(dataDir, "alpha", future);
+
+    const url = await hub(dataDir).start();
+    expect((await closingFrame(url, "/sync/alpha")).code).toBe(1011);
+
+    // The refusal belongs to `alpha`, not to the hub. Caching the rejection on
+    // the registry, or hoisting the load up into `start()`, would turn one board
+    // nobody can read into an outage across every board — the same failure the
+    // index rebuild takes care to avoid, reintroduced one layer up.
+    const writer = clients.open(url, "beta");
+    await waitFor(() => writer.provider.synced);
+    writer.doc.getMap("board").set("shape", "rect");
+    await waitFor(async () => (await roomDocBytes(url, "beta")) > 2);
+
+    const reader = clients.open(url, "beta");
+    await waitFor(() => reader.doc.getMap("board").get("shape") === "rect");
+    expect(reader.doc.getMap("board").toJSON()).toEqual({ shape: "rect" });
+
+    // And asking for the refused board again refuses it the same way, rather
+    // than tripping over a half-opened room the first attempt left behind.
+    expect((await closingFrame(url, "/sync/alpha")).code).toBe(1011);
   });
 
   it("loads the complete frames and cuts a truncated payload off the file (R3)", async () => {
@@ -266,8 +295,15 @@ describe("recovery", () => {
     const dangerous = contaminatingOffsets([first, second], third);
     expect(dangerous.length).toBeGreaterThan(0);
 
+    // The sweep is a bare loop with nothing to wait on, so a starved machine
+    // would otherwise expire against the outer budget and name nothing. This
+    // gives up first and says how far it got.
+    const deadline = Date.now() + 15_000;
     const wrong: { cut: number; board: Record<string, unknown> }[] = [];
     for (let cut = 1; cut < third.byteLength; cut += 1) {
+      if (Date.now() > deadline) {
+        throw new Error(`sweep reached only offset ${cut} of ${third.byteLength} within 15s`);
+      }
       const bad = third.subarray(0, cut);
       await writeFile(
         logPath(dataDir, "alpha"),

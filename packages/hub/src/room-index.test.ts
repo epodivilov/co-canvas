@@ -15,6 +15,7 @@ import {
   recordUpdates,
   roomDocBytes,
   settle,
+  stopHubs,
   waitFor,
 } from "./test-helpers";
 
@@ -40,7 +41,7 @@ describe("room index", () => {
   afterEach(async () => {
     clients.closeAll();
     try {
-      for (const created of hubs) await created.stop();
+      await stopHubs(hubs);
     } finally {
       hubs.clear();
       // Unconditional: a scenario that failed with a hub mid-flush would
@@ -49,24 +50,30 @@ describe("room index", () => {
     }
   });
 
-  it("starts, and keeps every other board, when one log cannot be read (R7)", async () => {
-    const dataDir = await dataDirs.create();
-    await seedLog(dataDir, "alpha");
-    await seedLog(dataDir, "beta");
-    await chmod(logPath(dataDir, "beta"), 0o000);
+  // Root ignores the bits this clears, so under uid 0 — a plain Docker CI
+  // image, say — the scenario would pass without ever reaching the guard.
+  // Skipped visibly rather than left silently vacuous.
+  it.skipIf(process.getuid?.() === 0)(
+    "starts, and keeps every other board, when one log cannot be read (R7)",
+    async () => {
+      const dataDir = await dataDirs.create();
+      await seedLog(dataDir, "alpha");
+      await seedLog(dataDir, "beta");
+      await chmod(logPath(dataDir, "beta"), 0o000);
 
-    const url = await hub(dataDir).start();
+      const url = await hub(dataDir).start();
 
-    // One unreadable file must not take the hub with it. Rebuilding the index
-    // is a scan over every board, so an error that escapes it turns "one bad
-    // log" into "no hub at all" — worse than the state the rebuild exists to
-    // recover from.
-    const listed = (await readIndex(dataDir)).map((entry) => entry.slug).sort();
-    expect(listed).toEqual(["alpha", "beta"]);
-    const reader = clients.open(url, "alpha");
-    await waitFor(() => reader.doc.getMap("board").get("shape") === "rect");
-    expect(reader.doc.getMap("board").toJSON()).toEqual({ shape: "rect" });
-  });
+      // One unreadable file must not take the hub with it. Rebuilding the index
+      // is a scan over every board, so an error that escapes it turns "one bad
+      // log" into "no hub at all" — worse than the state the rebuild exists to
+      // recover from.
+      const listed = (await readIndex(dataDir)).map((entry) => entry.slug).sort();
+      expect(listed).toEqual(["alpha", "beta"]);
+      const reader = clients.open(url, "alpha");
+      await waitFor(() => reader.doc.getMap("board").get("shape") === "rect");
+      expect(reader.doc.getMap("board").toJSON()).toEqual({ shape: "rect" });
+    },
+  );
 
   it("rebuilds an index that parses but has fallen behind the logs (R7)", async () => {
     const dataDir = await dataDirs.create();
