@@ -5,7 +5,9 @@ import { createHub } from "./index";
 import {
   activeTimers,
   createClientPool,
+  createDataDirPool,
   getJson,
+  liveRooms,
   openRawClient,
   rawGet,
   waitFor,
@@ -13,16 +15,18 @@ import {
 
 describe("lifecycle", () => {
   const clients = createClientPool();
+  const dataDirs = createDataDirPool();
   let hub: Hub | null = null;
 
   afterEach(async () => {
     clients.closeAll();
     await hub?.stop();
     hub = null;
+    await dataDirs.removeAll();
   });
 
   it("binds an OS-assigned port and reports it in the URL (R7)", async () => {
-    hub = createHub({ port: 0 });
+    hub = createHub({ port: 0, dataDir: await dataDirs.create() });
 
     const url = await hub.start();
 
@@ -32,7 +36,7 @@ describe("lifecycle", () => {
   });
 
   it("closes live sockets on stop and comes back up able to serve (R7)", async () => {
-    hub = createHub({ port: 0 });
+    hub = createHub({ port: 0, dataDir: await dataDirs.create() });
     const url = await hub.start();
     const before = clients.open(url, "alpha");
     await waitFor(() => before.provider.wsconnected);
@@ -59,7 +63,7 @@ describe("lifecycle", () => {
   });
 
   it("hands back the timers its rooms hold, so the host process can exit (R7)", async () => {
-    hub = createHub({ port: 0 });
+    hub = createHub({ port: 0, dataDir: await dataDirs.create() });
     const url = await hub.start();
 
     // Raw sockets rather than `y-websocket` clients: a provider schedules a
@@ -69,6 +73,9 @@ describe("lifecycle", () => {
       openRawClient(url, "/sync/alpha"),
       openRawClient(url, "/sync/beta"),
     ]);
+    // A room is registered once it has been read off disk, which is a turn of
+    // the event loop after the socket opened.
+    await waitFor(async () => (await liveRooms(url)).length === 2);
     await expect(getJson(url, "/__rooms")).resolves.toMatchObject({
       rooms: [{ slug: "alpha" }, { slug: "beta" }],
     });
@@ -90,7 +97,7 @@ describe("lifecycle", () => {
   });
 
   it("releases the port it was serving on (R7)", async () => {
-    hub = createHub({ port: 0 });
+    hub = createHub({ port: 0, dataDir: await dataDirs.create() });
     const url = await hub.start();
 
     await hub.stop();

@@ -9,20 +9,29 @@ import {
 import * as Y from "yjs";
 import type { Hub } from "./index";
 import { createHub } from "./index";
-import { createClientPool, MESSAGE_SYNC, openRawClient, syncFrame, waitFor } from "./test-helpers";
+import {
+  createClientPool,
+  createDataDirPool,
+  MESSAGE_SYNC,
+  openRawClient,
+  syncFrame,
+  waitFor,
+} from "./test-helpers";
 
 describe("document sync", () => {
   const clients = createClientPool();
+  const dataDirs = createDataDirPool();
   let hub: Hub | null = null;
 
   afterEach(async () => {
     clients.closeAll();
     await hub?.stop();
     hub = null;
+    await dataDirs.removeAll();
   });
 
   async function startHub(): Promise<string> {
-    hub = createHub({ port: 0 });
+    hub = createHub({ port: 0, dataDir: await dataDirs.create() });
     return await hub.start();
   }
 

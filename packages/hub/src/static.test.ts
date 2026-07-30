@@ -3,20 +3,25 @@ import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import type { Hub } from "./index";
 import { createHub } from "./index";
-import { rawGet } from "./test-helpers";
+import { createDataDirPool, rawGet } from "./test-helpers";
 
 const fixtureDir = fileURLToPath(new URL("./__fixtures__/static", import.meta.url));
 
 describe("static serving", () => {
+  const dataDirs = createDataDirPool();
   let hub: Hub | null = null;
 
   afterEach(async () => {
     await hub?.stop();
     hub = null;
+    await dataDirs.removeAll();
   });
 
   async function startHub(staticDir?: string): Promise<string> {
-    hub = createHub(staticDir === undefined ? { port: 0 } : { port: 0, staticDir });
+    const dataDir = await dataDirs.create();
+    hub = createHub(
+      staticDir === undefined ? { port: 0, dataDir } : { port: 0, dataDir, staticDir },
+    );
     return await hub.start();
   }
 
