@@ -62,7 +62,9 @@ test.describe("R2 — propagation and isolation", () => {
 
     await selectAt(a, 650, 425);
     await a.keyboard.press("Control+Shift+BracketLeft");
-    await sleep(1_000);
+    await expect
+      .poll(async () => (await liveIds(a)).join(","), { timeout: CONVERGENCE_TIMEOUT })
+      .not.toBe(initial.join(","));
 
     const reordered = await liveIds(a);
     expect(reordered).not.toEqual(initial);

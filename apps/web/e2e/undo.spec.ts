@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 import { expect, type RoomOpener, test } from "./fixtures";
-import { drawRect, expectConverged, expectCount, liveIds, sleep } from "./helpers";
+import { drawRect, expectConverged, expectCount, liveIds } from "./helpers";
 
 /**
  * A drew one element, then received one from B, then drew a second of its own.
@@ -31,10 +31,9 @@ test.describe("R4 — undo stays local", () => {
     const [ownFirst, remote, ownSecond] = ids;
 
     await a.keyboard.press("Control+z");
-    await sleep(1_500);
+    await expectCount(a, 2);
 
     const after = await liveIds(a);
-    expect(after).toHaveLength(2);
     expect(after).not.toContain(ownSecond);
     expect(after).toContain(ownFirst);
     expect(after).toContain(remote);
@@ -50,10 +49,9 @@ test.describe("R4 — undo stays local", () => {
     const undo = a.locator('[aria-label="Undo"]');
     await expect(undo).toHaveCount(1);
     await undo.click();
-    await sleep(1_500);
+    await expectCount(a, 2);
 
     const after = await liveIds(a);
-    expect(after).toHaveLength(2);
     expect(after).not.toContain(ownSecond);
     expect(after).toContain(ownFirst);
     expect(after).toContain(remote);
@@ -65,14 +63,17 @@ test.describe("R4 — undo stays local", () => {
     const [ownFirst, remote, ownSecond] = ids;
 
     await a.keyboard.press("Control+z");
-    await sleep(1_000);
+    // Waited for rather than slept through: the second press has to land on a
+    // history that has already given the first one back.
+    await expectCount(a, 2);
     await a.keyboard.press("Control+z");
-    await sleep(1_500);
+    await expectCount(a, 1);
 
     const after = await liveIds(a);
     expect(after).toEqual([remote]);
     expect(after).not.toContain(ownFirst);
     expect(after).not.toContain(ownSecond);
+    await expectCount(b, 1);
     expect(await liveIds(b)).toEqual([remote]);
     expect(await expectConverged(a, b)).toEqual([remote]);
   });

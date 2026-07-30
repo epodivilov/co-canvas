@@ -1,5 +1,5 @@
 import { expect, test } from "./fixtures";
-import { drawRect, expectCount, liveIds, selectAt, sleep } from "./helpers";
+import { CONVERGENCE_TIMEOUT, drawRect, expectCount, liveIds, selectAt } from "./helpers";
 
 test.describe("R1 — joining a room", () => {
   test("a fresh room renders a canvas and reports a connection", async ({ room }) => {
@@ -34,7 +34,9 @@ test.describe("R1 — joining a room", () => {
     // Right edge of the upper rectangle, clear of the lower one.
     await selectAt(a, 650, 425);
     await a.keyboard.press("Control+Shift+BracketLeft");
-    await sleep(1_000);
+    await expect
+      .poll(async () => (await liveIds(a)).join(","), { timeout: CONVERGENCE_TIMEOUT })
+      .not.toBe(initial.join(","));
 
     const reordered = await liveIds(a);
     expect(reordered).not.toEqual(initial);

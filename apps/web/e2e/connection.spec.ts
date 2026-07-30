@@ -32,6 +32,12 @@ test.describe("R7 — connection lifecycle", () => {
     await drawRect(a, 700, 250, 100, 80);
     await expectCount(a, 2);
     const drawn = await liveIds(a);
+    // A page that is talking to the hub has a socket open, so its own count of
+    // them is above zero. `y-websocket`'s `wsUnsuccessfulReconnects` is zero
+    // here instead — it counts only sockets that never opened, and resets on
+    // every success — which is why the room keeps a count of its own.
+    const socketsBeforeOutage = await socketsOpened(a);
+    expect(socketsBeforeOutage).toBeGreaterThan(0);
 
     await hub.stop();
     await waitForState(a, "disconnected");
@@ -40,6 +46,8 @@ test.describe("R7 — connection lifecycle", () => {
     // No reload: `y-websocket` retries on its own and the page picks the room
     // back up.
     await waitForState(a, "connected", 30_000);
+    // Coming back means a new socket, not the old one waking up.
+    expect(await socketsOpened(a)).toBeGreaterThan(socketsBeforeOutage);
     await expect(a.locator(".excalidraw")).toHaveCount(1);
     expect(await liveIds(a)).toEqual(drawn);
 
@@ -67,6 +75,12 @@ test.describe("R7 — connection lifecycle", () => {
     // `y-websocket` reconnects after every close whatever the code, so an
     // unhandled 1008 would keep opening sockets behind a stuck indicator.
     const opened = await socketsOpened(page);
+    // The count has to be the page's own. `y-websocket`'s
+    // `wsUnsuccessfulReconnects` sits at zero for a room whose handshake
+    // completes — which a refused room's always does — so reading that instead
+    // would leave the assertion below trivially true however many sockets the
+    // page went on to open.
+    expect(opened).toBeGreaterThan(0);
     await sleep(CONVERGENCE_TIMEOUT / 3);
     expect(await socketsOpened(page)).toBe(opened);
     expect(await liveIds(page)).toEqual([]);
