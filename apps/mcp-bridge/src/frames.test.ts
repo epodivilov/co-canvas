@@ -148,6 +148,9 @@ describe("frames", () => {
 
     expect(result.isError).toBe(true);
     expect(textOf(result)).toContain("phantom");
+    // Refused here rather than left to upstream, which throws its own
+    // "wasn't mapped correctly" from inside the converter.
+    expect(textOf(result)).toContain("neither in this room nor created by this call");
     await settle();
     expect(roomScene(peer.doc)).toEqual([]);
   });

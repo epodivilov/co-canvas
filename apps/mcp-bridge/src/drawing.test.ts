@@ -211,6 +211,10 @@ describe("ids and atomicity", () => {
 
     expect(result.isError).toBe(true);
     expect(textOf(result)).toContain("auth-service");
+    // Refused before anything is converted, and told what to do instead —
+    // there is a second, blunter check behind this one for ids the conversion
+    // generates, and it is not the one an agent should be reading.
+    expect(textOf(result)).toContain("update_elements");
     await settle();
     expect(roomScene(peer.doc)).toHaveLength(1);
     expect(roomScene(peer.doc)[0]?.type).toBe("rectangle");

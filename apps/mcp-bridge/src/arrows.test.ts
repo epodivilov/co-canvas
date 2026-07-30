@@ -184,6 +184,7 @@ describe("arrows", () => {
     // Upstream drops a binding it cannot resolve and reports nothing.
     expect(result.isError).toBe(true);
     expect(textOf(result)).toContain("nowhere");
+    expect(textOf(result)).toContain("neither in this room nor created by this call");
     await settle();
     expect(roomScene(peer.doc)).toHaveLength(1);
     expect(roomElement(peer.doc, "left")?.boundElements).toBeNull();
