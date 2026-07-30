@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import type { Hub } from "./index";
 import { createHub } from "./index";
-import { createDataDirPool, rawGet } from "./test-helpers";
+import { createDataDirPool, rawGet, stopHubs } from "./test-helpers";
 
 const fixtureDir = fileURLToPath(new URL("./__fixtures__/static", import.meta.url));
 
@@ -13,7 +13,7 @@ describe("static serving", () => {
 
   afterEach(async () => {
     try {
-      await hub?.stop();
+      await stopHubs(hub === null ? [] : [hub]);
     } finally {
       hub = null;
       // Unconditional: a scenario that failed with a hub mid-flush would

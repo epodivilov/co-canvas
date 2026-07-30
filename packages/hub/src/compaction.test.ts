@@ -12,6 +12,7 @@ import {
   readLog,
   recordUpdates,
   settle,
+  stopHubs,
   waitFor,
 } from "./test-helpers";
 
@@ -35,7 +36,7 @@ describe("compaction", () => {
   afterEach(async () => {
     clients.closeAll();
     try {
-      for (const created of hubs) await created.stop();
+      await stopHubs(hubs);
     } finally {
       hubs.clear();
       // Unconditional: a scenario that failed with a hub mid-flush would

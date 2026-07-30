@@ -11,6 +11,7 @@ import {
   createDataDirPool,
   MESSAGE_AWARENESS,
   openRawClient,
+  stopHubs,
   syncFrame,
   waitFor,
 } from "./test-helpers";
@@ -23,7 +24,7 @@ describe("awareness", () => {
   afterEach(async () => {
     clients.closeAll();
     try {
-      await hub?.stop();
+      await stopHubs(hub === null ? [] : [hub]);
     } finally {
       hub = null;
       // Unconditional: a scenario that failed with a hub mid-flush would

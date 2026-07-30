@@ -18,6 +18,7 @@ import {
   recordUpdates,
   roomDocBytes,
   settle,
+  stopHubs,
   upgradeOutcome,
   waitFor,
 } from "./test-helpers";
@@ -45,7 +46,7 @@ describe("durability", () => {
   afterEach(async () => {
     clients.closeAll();
     try {
-      for (const created of hubs) await created.stop();
+      await stopHubs(hubs);
     } finally {
       hubs.clear();
       // Unconditional: a scenario that failed with a hub mid-flush would

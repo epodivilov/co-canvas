@@ -5,6 +5,7 @@ import {
   createClientPool,
   createDataDirPool,
   getJson,
+  stopHubs,
   upgradeOutcome,
   waitFor,
 } from "./test-helpers";
@@ -23,7 +24,7 @@ describe("websocket routing", () => {
   afterEach(async () => {
     clients.closeAll();
     try {
-      await hub.stop();
+      await stopHubs([hub]);
     } finally {
       // Unconditional: a scenario that failed with a hub mid-flush would
       // otherwise leave its directory behind in the OS temp dir forever.

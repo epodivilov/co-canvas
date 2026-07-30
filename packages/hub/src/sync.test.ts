@@ -14,6 +14,7 @@ import {
   createDataDirPool,
   MESSAGE_SYNC,
   openRawClient,
+  stopHubs,
   syncFrame,
   waitFor,
 } from "./test-helpers";
@@ -26,7 +27,7 @@ describe("document sync", () => {
   afterEach(async () => {
     clients.closeAll();
     try {
-      await hub?.stop();
+      await stopHubs(hub === null ? [] : [hub]);
     } finally {
       hub = null;
       // Unconditional: a scenario that failed with a hub mid-flush would

@@ -9,6 +9,7 @@ import {
   logPath,
   readLog,
   settle,
+  stopHubs,
   waitFor,
 } from "./test-helpers";
 
@@ -111,7 +112,7 @@ describe("atomic publication", () => {
   afterEach(async () => {
     clients.closeAll();
     try {
-      for (const created of hubs) await created.stop();
+      await stopHubs(hubs);
     } finally {
       hubs.clear();
       probe.watched.length = 0;

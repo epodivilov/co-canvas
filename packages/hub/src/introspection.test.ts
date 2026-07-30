@@ -2,7 +2,7 @@ import { PROTOCOL_VERSION } from "@co-canvas/protocol";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Hub } from "./index";
 import { createHub } from "./index";
-import { createClientPool, createDataDirPool, getJson, waitFor } from "./test-helpers";
+import { createClientPool, createDataDirPool, getJson, stopHubs, waitFor } from "./test-helpers";
 
 interface RoomsPayload {
   rooms: Array<{ slug: string; peers: number; docBytes: number }>;
@@ -22,7 +22,7 @@ describe("introspection", () => {
   afterEach(async () => {
     clients.closeAll();
     try {
-      await hub.stop();
+      await stopHubs([hub]);
     } finally {
       // Unconditional: a scenario that failed with a hub mid-flush would
       // otherwise leave its directory behind in the OS temp dir forever.

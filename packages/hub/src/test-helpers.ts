@@ -214,6 +214,48 @@ export function activeTimers(): number {
   return process.getActiveResourcesInfo().filter((resource) => resource === "Timeout").length;
 }
 
+/** Long enough for any honest `stop()`, short enough to beat vitest's hook timeout. */
+export const STOP_BUDGET_MS = 8000;
+
+/**
+ * Stops every hub, and rejects rather than hanging when one will not settle.
+ *
+ * A bare `await hub.stop()` on a hub that never resolves expires as an
+ * anonymous hook timeout, and takes the directory cleanup in the `finally` down
+ * with it. Rejecting on a budget of our own still fails the hook — a hub that
+ * cannot stop is a defect either way, so nothing stops being detected — but it
+ * says which hub and how long it waited, and it lets the cleanup run. Every hub
+ * is attempted before the first failure is rethrown, so one stuck hub does not
+ * strand the others.
+ */
+export async function stopHubs(
+  hubs: Iterable<{ stop(): Promise<void>; readonly url: string | null }>,
+  timeoutMs = STOP_BUDGET_MS,
+): Promise<void> {
+  let failure: unknown = null;
+
+  for (const hub of hubs) {
+    const target = hub.url ?? "a hub that was not listening";
+    let timer: NodeJS.Timeout | null = null;
+    const expiry = new Promise<never>((_, reject) => {
+      timer = setTimeout(
+        () => reject(new Error(`stop() on ${target} did not settle within ${timeoutMs}ms`)),
+        timeoutMs,
+      );
+    });
+
+    try {
+      await Promise.race([hub.stop(), expiry]);
+    } catch (error) {
+      failure ??= error;
+    } finally {
+      if (timer !== null) clearTimeout(timer);
+    }
+  }
+
+  if (failure !== null) throw failure;
+}
+
 /**
  * Hands out throwaway data directories and removes them afterwards.
  *
