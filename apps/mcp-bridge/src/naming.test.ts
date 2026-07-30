@@ -13,13 +13,16 @@ describe("labels (R5)", () => {
   });
 
   it("reads a wrapped label as the string the person typed", () => {
+    // Excalidraw breaks a word too long for its container, so the wrapped text
+    // is not the typed one with its spaces replaced: folding the newlines back
+    // out of `text` recovers "Authent ication", never "Authentication".
     const { text } = describeScene([
       rect("one", 0, 0, 120, 90),
-      label("one-label", "one", "Payment\nGateway\nService", "Payment Gateway Service"),
+      label("one-label", "one", "Authent\nication\nservice", "Authentication service"),
     ]);
 
-    expect(section(text, "NODES")[0]).toContain('"Payment Gateway Service"');
-    expect(section(text, "NODES")[0]).not.toContain("Payment\nGateway");
+    expect(section(text, "NODES")[0]).toContain('"Authentication service"');
+    expect(section(text, "NODES")[0]).not.toContain("Authent ication");
   });
 
   it("labels a standalone text with its own content", () => {

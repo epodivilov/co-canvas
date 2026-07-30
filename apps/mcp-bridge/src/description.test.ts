@@ -101,10 +101,10 @@ describe("the description's shape (R2)", () => {
   });
 
   it("keeps a node line on one line however its label wraps and whatever it quotes", () => {
-    const wrapped = 'a very long "quoted"\nlabel that\nwrapped';
+    const typed = 'a very long "quoted"\nlabel the person\nbroke by hand';
     const { text } = describeScene([
       rect("one", 0, 0, 200, 90),
-      label("one-label", "one", 'a very long\n"quoted"\nlabel', wrapped),
+      label("one-label", "one", 'a very long\n"quoted"\nlabel', typed),
       rect("two", 0, 200, 200, 90),
     ]);
 
@@ -114,5 +114,20 @@ describe("the description's shape (R2)", () => {
     // newline would break.
     expect([...sections(text).keys()]).toEqual(["NODES", "ARROWS", "GEOMETRY"]);
     expect(section(text, "GEOMETRY")).toHaveLength(2);
+  });
+
+  it("keeps a container line on one line however its members' labels break", () => {
+    const { text } = describeScene([
+      frame("frm", 0, 0, 400, 400, "Server\nside"),
+      rect("one", 20, 20, 100, 60, { frameId: "frm", groupIds: ["pair"] }),
+      label("one-label", "one", "Auth", "Auth\nservice"),
+      rect("two", 20, 200, 100, 60, { frameId: "frm", groupIds: ["pair"] }),
+      label("two-label", "two", "Store"),
+    ]);
+
+    expect(section(text, "CONTAINERS")).toHaveLength(2);
+    expect(section(text, "CONTAINERS")[0]).toContain("contains Auth service, Store");
+    expect(section(text, "CONTAINERS")[1]).toBe("group pair: Auth service, Store");
+    expect([...sections(text).keys()]).toEqual(["NODES", "CONTAINERS", "ARROWS", "GEOMETRY"]);
   });
 });

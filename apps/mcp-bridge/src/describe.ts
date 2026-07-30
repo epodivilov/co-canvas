@@ -512,9 +512,15 @@ function frameReference(id: string, byId: ReadonlyMap<string, Described>): strin
   return frame.name === null ? NO_NAME : quote(frame.name);
 }
 
+/**
+ * The elements a container holds, named the way a person would name them.
+ *
+ * Unquoted, as the format has it — and folded all the same, because a label a
+ * person typed across three lines would otherwise split this line into three.
+ */
 function members(nodes: readonly Described[]): string {
   if (nodes.length === 0) return "(empty)";
-  return nodes.map((node) => node.label ?? node.id).join(", ");
+  return nodes.map((node) => (node.label === null ? node.id : oneLine(node.label))).join(", ");
 }
 
 // ---------------------------------------------------------------------------
@@ -531,7 +537,12 @@ function members(nodes: readonly Described[]): string {
  * the label readable rather than turning it into `\n`-littered source.
  */
 function quote(label: string): string {
-  return JSON.stringify(label.replace(/\s*[\r\n]+\s*/g, " "));
+  return JSON.stringify(oneLine(label));
+}
+
+/** Every line break in a string folded to a single space. */
+function oneLine(text: string): string {
+  return text.replace(/\s*[\r\n]+\s*/g, " ");
 }
 
 /** Rotation in whole degrees, normalised into one turn. */
