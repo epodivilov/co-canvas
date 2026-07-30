@@ -1,0 +1,37 @@
+SCENE: 7 nodes, 4 arrows, extent 80,60 .. 1080,650
+GRID: coarse cells ~261x134px, columns A..D left→right, rows 1..5 top→bottom
+
+NODES
+  browser  "Browser Canvas"  rectangle  cell A1  group=grp-client
+  hub  "Hub (y-websocket)"  rectangle  cell B1  group=grp-storage,grp-server  frame="Server side"
+  bridge  "MCP Bridge"  rectangle  cell D1
+  overview  "Overview UI"  rectangle  cell A2  group=grp-client
+  reminder  "split the hub?"  text  cell D2
+  log  "File Log"  rectangle  cell B3  group=grp-storage,grp-server  frame="Server side"
+  index  "Room Index"  rectangle  cell B5  group=grp-server
+
+CONTAINERS
+  frame server "Server side" cells B1..C4: contains Hub (y-websocket), File Log
+  group grp-client: Browser Canvas, Overview UI
+  group grp-storage: Hub (y-websocket), File Log
+  group grp-server: Hub (y-websocket), File Log, Room Index
+
+ARROWS
+  opens  "Browser Canvas" -> "Hub (y-websocket)"
+  flushes  "Hub (y-websocket)" -> "File Log"  "on flush"
+  indexes  "File Log" -> "Room Index"
+  draws  "MCP Bridge" -> "Hub (y-websocket)"
+
+GEOMETRY (x, y, width, height)
+  browser  80, 100, 200, 90
+  hub  460, 120, 220, 100
+  bridge  880, 120, 200, 90
+  overview  80, 260, 200, 90
+  reminder  880, 300, 143, 25
+  log  460, 380, 220, 100
+  index  460, 560, 220, 90
+  server  420, 60, 320, 480  (frame)
+  opens  from (284,148) to (456,154)
+  flushes  from (570,224) to (570,376)
+  indexes  from (570,484) to (570,556)
+  draws  from (876,168) to (684,172)

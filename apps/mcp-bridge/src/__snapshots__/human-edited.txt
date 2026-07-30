@@ -1,0 +1,32 @@
+SCENE: 6 nodes, 4 arrows, extent 82,60 .. 1392,755
+GRID: coarse cells ~274x132px, columns A..E left→right, rows 1..6 top→bottom
+
+NODES
+  browser  "Browser Canvas"  rectangle  cell A1
+  bridge  "MCP Bridge"  rectangle  cell D1
+  hub  "Hub (y-websocket)"  rectangle  cell B1  frame="Server side"
+  log  "File Log"  rectangle  cell B3  frame="Server side"
+  overview  "Overview UI"  rectangle  cell E5  rot=30
+  reminder  "remember to split this"  text  cell B5
+
+CONTAINERS
+  frame server "Server side" cells B1..C4: contains Hub (y-websocket), File Log
+
+ARROWS
+  opens  "Browser Canvas" -> "Hub (y-websocket)"
+  flushes  "Hub (y-websocket)" -> "File Log"  "on flush"  (1 waypoint(s))
+  draws  "MCP Bridge" -> "Hub (y-websocket)"
+  lists  (unbound) -> "Browser Canvas"
+
+GEOMETRY (x, y, width, height)
+  browser  82, 104, 200, 90
+  bridge  863, 118, 200, 90
+  hub  460, 122, 220, 100
+  log  459, 380, 220, 100
+  overview  1183, 622, 200, 90
+  reminder  301, 640, 224, 25
+  server  420, 60, 320, 480  (frame)
+  opens  from (286,152) to (456,156)
+  flushes  from (570,226) to (569,376)  via (644,300)
+  draws  from (859,166) to (684,170)
+  lists  from (1183,640) to (186,198)

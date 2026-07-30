@@ -66,6 +66,7 @@ describe("hub acquisition", () => {
       "add_elements",
       "create_room",
       "delete_elements",
+      "describe_scene",
       "list_rooms",
       "open_room",
       "update_elements",
@@ -109,6 +110,6 @@ describe("hub acquisition", () => {
     const second = await bridge.call("list_rooms");
     expect(second.isError).toBe(true);
     const tools = await bridge.client.listTools();
-    expect(tools.tools).toHaveLength(6);
+    expect(tools.tools).toHaveLength(7);
   }, 20_000);
 });
