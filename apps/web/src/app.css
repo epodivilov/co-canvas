@@ -1,0 +1,96 @@
+:root {
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: #1b1b1f;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+.placeholder {
+  padding: 2rem;
+}
+
+.room {
+  position: relative;
+  height: 100%;
+  overflow: hidden;
+}
+
+.room__canvas {
+  position: absolute;
+  inset: 0;
+}
+
+.room__error {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 2rem;
+  text-align: center;
+}
+
+.room__error h1 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.room__error p {
+  margin: 0;
+}
+
+.room__error-hint {
+  max-width: 32rem;
+  color: #6b6b78;
+  font-size: 0.875rem;
+}
+
+/*
+ * Bottom centre is the one strip of canvas Excalidraw's desktop layout leaves
+ * free: its toolbar sits along the top, the shape panel top left, the zoom and
+ * undo controls bottom left, and help bottom right.
+ */
+.connection-indicator {
+  position: absolute;
+  bottom: 0.75rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  padding: 0.25rem 0.7rem;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 88%);
+  box-shadow: 0 1px 4px rgb(0 0 0 / 12%);
+  color: #6b6b78;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.connection-indicator__dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: currentcolor;
+}
+
+.connection-indicator[data-connection-state="connected"] {
+  color: #1a7f4b;
+}
+
+.connection-indicator[data-connection-state="disconnected"] {
+  color: #a15c00;
+}
+
+.connection-indicator[data-connection-state="refused"] {
+  color: #b3261e;
+}
