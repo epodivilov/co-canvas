@@ -65,12 +65,25 @@ describe("race", () => {
   it("converges on a hub that arrives after its own died on the port (R3)", async () => {
     const port = await freePort();
     // The scenario above is best-effort about which interleaving it reaches;
-    // this one fixes the awkward order deliberately. The hub takes the port a
-    // quarter of a second late, well after the command this call starts has
-    // given up on it — which is what a losing hub's EADDRINUSE looks like from
-    // here. Rejecting at that point would leave one of several racing callers
-    // with an error while a perfectly good hub is listening.
-    await scenario.startFakeHub({ mode: "healthy", port, bindDelayMs: 250, awaitListening: false });
+    // this one fixes the awkward order deliberately. The hub takes the port
+    // late, after the command this call starts has given up on it — which is
+    // what a losing hub's EADDRINUSE looks like from here. Rejecting at that
+    // point would leave one of several racing callers with an error while a
+    // perfectly good hub is listening.
+    //
+    // "Late" is pinned to the command's death rather than to a wall clock: this
+    // hub waits until the pid the command logs on entry is gone, which is the
+    // same moment the client sees it exit. A delay in milliseconds would
+    // instead be a bet that this hub boots no slower than the command does, and
+    // a busy machine settles that bet either way — too early and the hub is
+    // already up before the command dies, too late and it arrives outside the
+    // window the client allows a dead child's replacement.
+    await scenario.startFakeHub({
+      mode: "healthy",
+      port,
+      bindAfterExit: scenario.spawnedLogPath(),
+      awaitListening: false,
+    });
 
     const info = await findOrStartHub({
       port,
