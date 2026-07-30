@@ -81,7 +81,7 @@ describe("compaction", () => {
     const reader = clients.open(reopenedUrl, "alpha");
     await waitFor(() => reader.doc.getMap("board").get("blob") === last);
     expect(reader.doc.getMap("board").get("blob")).toBe(last);
-  }, 30_000);
+  }, 15_000);
 
   it("leaves the log alone when the appends are large but the board is larger (R5)", async () => {
     const dataDir = await dataDirs.create();
@@ -111,7 +111,7 @@ describe("compaction", () => {
     const log = await readLog(dataDir, "alpha");
     expect(log.frames.length).toBeGreaterThan(1);
     expect(log.bytes).toBeGreaterThan(snapshot);
-  }, 30_000);
+  }, 15_000);
 
   it("ignores a temporary file left behind by an interrupted compaction (R5)", async () => {
     const dataDir = await dataDirs.create();

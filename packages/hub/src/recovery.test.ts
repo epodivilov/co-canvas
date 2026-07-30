@@ -289,7 +289,7 @@ describe("recovery", () => {
     }
 
     expect(wrong).toEqual([]);
-  }, 60_000);
+  }, 20_000);
 
   it("keeps a recovered room writable across a restart (R4)", async () => {
     const [first, second, third] = threeUpdates();

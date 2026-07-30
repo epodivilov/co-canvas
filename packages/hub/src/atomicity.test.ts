@@ -156,7 +156,7 @@ describe("atomic publication", () => {
     expect(probe.calls.filter((call) => call.path === log && call.op !== "appendFile")).toEqual([]);
     expect(probe.reads.length).toBeGreaterThan(0);
     expect(probe.reads.filter((read) => !read.complete)).toEqual([]);
-  }, 30_000);
+  }, 15_000);
 
   it("replaces rooms.json wholesale so a reader never sees half an index (R7)", async () => {
     const dataDir = await dataDirs.create();
