@@ -25,6 +25,21 @@ describe("labels (R5)", () => {
     expect(section(text, "NODES")[0]).not.toContain("Authent ication");
   });
 
+  it("folds a line break in a label to a space rather than escaping it", () => {
+    // `JSON.stringify` on its own would keep the format to one line by turning
+    // the break into a literal `\n`, which every reader then has to undo. A
+    // label is content: it should arrive readable.
+    const { text } = describeScene([
+      rect("one", 0, 0, 200, 90),
+      label("one-label", "one", "Auth\nservice", "Auth\nservice"),
+      frame("frm", 400, 0, 300, 200, "Server\nside"),
+    ]);
+
+    expect(section(text, "NODES")[0]).toContain('"Auth service"');
+    expect(section(text, "CONTAINERS")[0]).toContain('"Server side"');
+    expect(text).not.toContain("\\n");
+  });
+
   it("labels a standalone text with its own content", () => {
     const { text } = describeScene([note("loose", 100, 100, "remember to split this")]);
 

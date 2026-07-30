@@ -123,6 +123,44 @@ describe("the geometry appendix (R4)", () => {
     expect(section(text, "NODES")[0]).not.toContain("rot=");
   });
 
+  it("turns a rotated line's points instead of marking it with rot=", () => {
+    // `rot=` exists so a stored box is not read as an outline, and a linear
+    // element's appendix line is never a box — its points already say where it
+    // runs. Marking it too would state the turn twice, and an agent applying
+    // the angle to points that already carry it would double it.
+    const flat = describeScene([
+      linear("line", "rule", 0, -50, [
+        [0, 0],
+        [100, 0],
+      ]),
+      rect("box", 0, 0, 100, 60, { angle: radians(90) }),
+    ]);
+    const turned = describeScene([
+      linear(
+        "line",
+        "rule",
+        0,
+        -50,
+        [
+          [0, 0],
+          [100, 0],
+        ],
+        { angle: radians(90) },
+      ),
+      rect("box", 0, 0, 100, 60, { angle: radians(90) }),
+    ]);
+
+    expect(section(flat.text, "GEOMETRY")).toContain("rule  from (0,-50) to (100,-50)");
+    expect(section(turned.text, "GEOMETRY")).toContain("rule  from (50,-100) to (50,0)");
+    expect(section(turned.text, "NODES").find((line) => idOf(line) === "rule")).not.toContain(
+      "rot=",
+    );
+    // The rectangle beside it does declare its turn, so the absence above is
+    // this rule rather than a renderer that forgot rotation altogether.
+    expect(section(turned.text, "NODES").find((line) => idOf(line) === "box")).toContain("rot=90");
+    expect(turned.summary.extent?.minY).toBe(-100);
+  });
+
   it("keeps a rotated element inside the stated extent", () => {
     // A square turned 45° reaches further than its stored box in both axes.
     const { text, summary } = describeScene([

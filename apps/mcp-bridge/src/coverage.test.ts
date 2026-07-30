@@ -92,6 +92,30 @@ describe("what the description covers (R3)", () => {
     expect(describedIds(text)).toContain("mf");
     expect(section(text, "GEOMETRY").map(idOf)).toContain("ifr");
     expect(section(text, "GEOMETRY").map(idOf)).toContain("mf");
+    // An `iframe` holds nothing, so it is a node; a `magicframe` is one of the
+    // two types Excalidraw's own `ExcalidrawFrameLikeElement` covers, and
+    // elements point at it through `frameId`.
+    expect(section(text, "NODES").map(idOf)).toContain("ifr");
+    expect(section(text, "NODES").map(idOf)).not.toContain("mf");
+  });
+
+  it("states a magicframe's contents from both sides, as it does a frame's", () => {
+    const { text } = describeScene([
+      el({ id: "mf", type: "magicframe", x: 0, y: 0, width: 400, height: 300, name: "Magic" }),
+      rect("inside", 20, 20, 100, 60, { frameId: "mf" }),
+      label("inside-label", "inside", "Held"),
+      rect("outside", 600, 20, 100, 60),
+    ]);
+    const nodes = new Map(section(text, "NODES").map((line) => [idOf(line), line]));
+
+    // Described as a node instead, its children would still name it as their
+    // frame while nothing named them back.
+    expect(nodes.get("inside")).toContain('frame="Magic"');
+    expect(nodes.get("outside")).not.toContain("frame=");
+    expect(section(text, "CONTAINERS")).toHaveLength(1);
+    expect(section(text, "CONTAINERS")[0]).toMatch(
+      /^frame mf "Magic" cells [A-Z]+\d+\.\.[A-Z]+\d+: contains Held$/,
+    );
   });
 
   it("gives a person's freehand stroke over a diagram a node line and a box", () => {
