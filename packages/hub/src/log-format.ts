@@ -36,19 +36,20 @@ export function encodeHeader(createdAt: number): Buffer {
 }
 
 /**
- * Reads a log's header, or `null` when these bytes are not a log this build can
- * read — too short, wrong marker, or a version from a future one.
+ * Reads a log's header, or `null` when these bytes are not one of our logs at
+ * all — too short, or missing the marker.
  *
- * A `null` is never treated as "no data": the caller quarantines the file
- * untouched, so a log written by a newer hub survives being opened by an older
- * one.
+ * The version is reported, not judged. "Damaged" and "written by a newer hub"
+ * are different situations with opposite right answers, and only the caller
+ * knows which of them it is in a position to act on.
  */
 export function decodeHeader(bytes: Buffer): LogHeader | null {
   if (bytes.length < LOG_HEADER_BYTES) return null;
   if (bytes.subarray(0, LOG_MAGIC.length).toString("ascii") !== LOG_MAGIC) return null;
-  const version = bytes.readUInt8(LOG_MAGIC.length);
-  if (version !== LOG_VERSION) return null;
-  return { version, createdAt: Number(bytes.readBigUInt64BE(LOG_MAGIC.length + 1)) };
+  return {
+    version: bytes.readUInt8(LOG_MAGIC.length),
+    createdAt: Number(bytes.readBigUInt64BE(LOG_MAGIC.length + 1)),
+  };
 }
 
 export function encodeFrame(payload: Uint8Array): Buffer {
@@ -66,7 +67,9 @@ export interface ParsedFrames {
 }
 
 /**
- * Splits a log's frames off its header.
+ * Splits a log's frames off its header. Call only on bytes whose header
+ * {@link decodeHeader} has already accepted, so there is a header's worth of
+ * them to skip.
  *
  * Anything after the last complete frame — a partial length prefix, or a prefix
  * promising more bytes than the file holds — is reported as a torn tail rather
@@ -81,7 +84,7 @@ export function parseFrames(bytes: Buffer): ParsedFrames {
   let offset = LOG_HEADER_BYTES;
 
   for (;;) {
-    if (offset >= bytes.length) return { frames, end: offset, torn: offset > bytes.length };
+    if (offset === bytes.length) return { frames, end: offset, torn: false };
     if (offset + FRAME_PREFIX_BYTES > bytes.length) return { frames, end: offset, torn: true };
 
     const length = bytes.readUInt32BE(offset);

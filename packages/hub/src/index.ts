@@ -14,6 +14,7 @@ import {
 } from "@co-canvas/protocol";
 import { WebSocket, WebSocketServer } from "ws";
 import { createPersistence } from "./persistence";
+import { UnsupportedLogVersionError } from "./room-log";
 import { createRoomRegistry } from "./rooms";
 import { createStaticHandler } from "./static-files";
 import { attachConnection } from "./sync";
@@ -171,9 +172,9 @@ export function createHub(options: HubOptions = {}): Hub {
           // `server.close()` waiting on a socket that is never going to end.
           webSocket.resume();
         },
-        () => {
+        (error: unknown) => {
           webSocket.resume();
-          webSocket.close(CLOSE_INTERNAL_ERROR, "room unavailable");
+          webSocket.close(CLOSE_INTERNAL_ERROR, roomFailureReason(error));
         },
       );
     });
@@ -253,6 +254,19 @@ export function createHub(options: HubOptions = {}): Hub {
     dataDir,
     idlePeriodMs,
   };
+}
+
+/**
+ * What to tell a peer whose room could not be opened.
+ *
+ * A version the hub cannot read is worth naming — it is the one failure here a
+ * user can act on, by running the build that wrote the log. Anything else is
+ * kept vague on the wire and stays a server-side concern. The reason field of a
+ * close frame is capped at 123 bytes, so it is trimmed well inside that.
+ */
+function roomFailureReason(error: unknown): string {
+  if (error instanceof UnsupportedLogVersionError) return error.message.slice(0, 120);
+  return "room unavailable";
 }
 
 /**

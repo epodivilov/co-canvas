@@ -18,6 +18,7 @@ import {
   recordUpdates,
   roomDocBytes,
   settle,
+  upgradeOutcome,
   waitFor,
 } from "./test-helpers";
 
@@ -43,9 +44,34 @@ describe("durability", () => {
 
   afterEach(async () => {
     clients.closeAll();
-    for (const created of hubs) await created.stop();
-    hubs.clear();
-    await dataDirs.removeAll();
+    try {
+      for (const created of hubs) await created.stop();
+    } finally {
+      hubs.clear();
+      // Unconditional: a scenario that failed with a hub mid-flush would
+      // otherwise leave its directory behind in the OS temp dir forever.
+      await dataDirs.removeAll();
+    }
+  });
+
+  it("refuses a room it cannot read and still gives the port back (R1)", async () => {
+    const dataDir = await dataDirs.create();
+    // A directory where a log belongs: the read fails with something other than
+    // "no such file", so the room cannot be opened at all.
+    await mkdir(join(dataDir, "rooms", "alpha.log"), { recursive: true });
+    const running = hub({ dataDir });
+    const url = await running.start();
+
+    await expect(upgradeOutcome(url, "/sync/alpha")).resolves.toEqual({
+      kind: "closed",
+      code: 1011,
+    });
+
+    // The refused socket still has a closing handshake to finish. A hub that
+    // held its receiver paused after giving up on the room would never read the
+    // peer's reply, and `server.close()` would wait on that socket forever.
+    await running.stop();
+    expect(running.url).toBeNull();
   });
 
   it("serves a board written before a restart to a client of the next hub (R1)", async () => {

@@ -1,9 +1,11 @@
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { WebSocket } from "ws";
 import * as Y from "yjs";
 import type { Hub } from "./index";
 import { createHub } from "./index";
+import { LOG_VERSION } from "./log-format";
 import { loadRoomLog } from "./room-log";
 import {
   createClientPool,
@@ -11,6 +13,7 @@ import {
   encodeLog,
   logBoard,
   logPath,
+  readIndex,
   readLog,
   recordUpdates,
   roomDocBytes,
@@ -18,6 +21,21 @@ import {
 } from "./test-helpers";
 
 const CREATED_AT = 1_700_000_000_000;
+
+/**
+ * Connects and reports the close frame the hub answered with, reason included.
+ * `upgradeOutcome` reports only the code, and the reason is the whole point
+ * when the hub is explaining what it could not read.
+ */
+function closingFrame(baseUrl: string, path: string): Promise<{ code: number; reason: string }> {
+  return new Promise((resolve, reject) => {
+    const socket = new WebSocket(`${baseUrl.replace(/^http/, "ws")}${path}`);
+    socket.on("error", reject);
+    socket.on("close", (code: number, reason: Buffer) =>
+      resolve({ code, reason: reason.toString("utf8") }),
+    );
+  });
+}
 
 /** The big-endian u32 a frame carries in front of its payload. */
 function framePrefix(length: number): Buffer {
@@ -85,9 +103,59 @@ describe("recovery", () => {
 
   afterEach(async () => {
     clients.closeAll();
-    for (const created of hubs) await created.stop();
-    hubs.clear();
-    await dataDirs.removeAll();
+    try {
+      for (const created of hubs) await created.stop();
+    } finally {
+      hubs.clear();
+      // Unconditional: a scenario that failed with a hub mid-flush would
+      // otherwise leave its directory behind in the OS temp dir forever.
+      await dataDirs.removeAll();
+    }
+  });
+
+  it("quarantines a file whose header is not a log of ours at all (R4)", async () => {
+    const [first] = threeUpdates();
+    const dataDir = await dataDirs.create();
+    const original = encodeLog(CREATED_AT, [first]);
+    original.write("XXXXX", 0, "ascii");
+    await seed(dataDir, "alpha", original);
+
+    const url = await hub(dataDir).start();
+    const reader = clients.open(url, "alpha");
+    await waitFor(() => reader.provider.synced);
+
+    // Nothing in there could be read, so the room opens empty — but the bytes
+    // are kept, because "damaged beyond this build's reach" is not the same as
+    // "worthless".
+    expect(reader.doc.getMap("board").toJSON()).toEqual({});
+    const quarantined = await quarantineFiles(dataDir, "alpha");
+    expect(quarantined).toHaveLength(1);
+    const preserved = await readFile(join(dataDir, "rooms", quarantined[0] as string));
+    expect(preserved.equals(original)).toBe(true);
+    expect((await readLog(dataDir, "alpha")).trailing).toBe(0);
+  });
+
+  it("refuses a log a newer hub wrote rather than quarantining it (R4)", async () => {
+    const [first, second] = threeUpdates();
+    const dataDir = await dataDirs.create();
+    const original = encodeLog(CREATED_AT, [first, second]);
+    // Same magic, a version byte from the future: a real board written by a
+    // build that knows something this one does not.
+    original.writeUInt8(LOG_VERSION + 1, 5);
+    await seed(dataDir, "alpha", original);
+
+    const url = await hub(dataDir).start();
+
+    // Loud, not blank. Quarantining would move the board aside, publish an
+    // empty log in its place and let the user draw on what looks like a fresh
+    // board — losing the real one silently, with nothing left to reconcile it.
+    const closed = await closingFrame(url, "/sync/alpha");
+    expect(closed.code).toBe(1011);
+    expect(closed.reason).toMatch(new RegExp(`version ${LOG_VERSION + 1}`));
+    expect((await readFile(logPath(dataDir, "alpha"))).equals(original)).toBe(true);
+    expect(await quarantineFiles(dataDir, "alpha")).toEqual([]);
+    // The board still exists, so the overview still knows about it.
+    expect((await readIndex(dataDir)).map((entry) => entry.slug)).toEqual(["alpha"]);
   });
 
   it("loads the complete frames and cuts a truncated payload off the file (R3)", async () => {

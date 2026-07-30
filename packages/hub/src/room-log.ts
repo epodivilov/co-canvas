@@ -7,8 +7,30 @@ import {
   encodeFrame,
   encodeHeader,
   LOG_HEADER_BYTES,
+  LOG_VERSION,
   parseFrames,
 } from "./log-format";
+
+/**
+ * A log this build will not touch because a newer one wrote it.
+ *
+ * Deliberately not treated as damage. Quarantining it would move a real board
+ * aside and publish an empty log in its place: the user opens the board, finds
+ * it blank, starts drawing, and there is nothing left that will ever reconcile
+ * the two. Refusing the room is loud, leaves the file exactly where it is, and
+ * is undone by running the newer hub again.
+ */
+export class UnsupportedLogVersionError extends Error {
+  readonly slug: RoomSlug;
+  readonly version: number;
+
+  constructor(slug: RoomSlug, version: number) {
+    super(`room ${slug}: its log is format version ${version}, this hub reads ${LOG_VERSION}`);
+    this.name = "UnsupportedLogVersionError";
+    this.slug = slug;
+    this.version = version;
+  }
+}
 
 /** Subdirectory of the data directory holding one log per board. */
 export const ROOMS_DIR_NAME = "rooms";
@@ -178,7 +200,12 @@ export async function loadRoomLog(
   }
 
   const header = decodeHeader(bytes);
+  // Not one of our logs at all: damage, and the bytes are kept aside rather
+  // than thrown away, because unreadable here is not worthless everywhere.
   if (header === null) return await quarantine(dataDir, slug, bytes, now, now, null);
+  // One of ours, from a build that knows more than this one. Nothing is moved
+  // and nothing is published over it.
+  if (header.version !== LOG_VERSION) throw new UnsupportedLogVersionError(slug, header.version);
 
   const parsed = parseFrames(bytes);
   const replay = replayFrames(parsed.frames);
