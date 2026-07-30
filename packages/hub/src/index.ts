@@ -12,7 +12,9 @@ import {
   isRoomSlug,
   PROTOCOL_VERSION,
 } from "@co-canvas/protocol";
-import { WebSocketServer } from "ws";
+import { WebSocket, WebSocketServer } from "ws";
+import { createPersistence } from "./persistence";
+import { UnsupportedLogVersionError } from "./room-log";
 import { createRoomRegistry } from "./rooms";
 import { createStaticHandler } from "./static-files";
 import { attachConnection } from "./sync";
@@ -23,34 +25,58 @@ const SYNC_PREFIX = "/sync/";
 const CLOSE_POLICY_VIOLATION = 1008;
 /** RFC 6455 going away, sent to every peer while shutting down. */
 const CLOSE_GOING_AWAY = 1001;
+/** RFC 6455 internal error: the slug was fine, the room could not be opened. */
+const CLOSE_INTERNAL_ERROR = 1011;
+
+/**
+ * How long a room with no peers is kept in memory before it is flushed,
+ * compacted and released.
+ *
+ * Long enough that closing a tab and opening it again is free, short enough
+ * that a hub left running for days is not holding every board anybody looked at.
+ */
+export const DEFAULT_IDLE_PERIOD_MS = 60_000;
 
 export interface HubOptions {
   /** TCP port to bind. `0` asks the OS for a free one — read the real port from `url`. */
   port?: number;
-  /** Directory holding room data. Created lazily by the persistence layer. */
+  /** Directory holding room data. Created by `start()`, after the port is bound. */
   dataDir?: string;
   /**
    * Directory of prebuilt frontend assets to serve alongside the API.
    * Without it the hub answers 404 on everything but its own endpoints.
    */
   staticDir?: string;
+  /** Overrides {@link DEFAULT_IDLE_PERIOD_MS}. */
+  idlePeriodMs?: number;
 }
 
 export interface Hub {
-  /** Starts listening and resolves with the base URL. Idempotent. */
+  /**
+   * Starts listening and resolves with the base URL. Idempotent.
+   *
+   * Rejects when the data directory cannot be created or written: a hub that
+   * cannot persist is a cache pretending to be a hub, and running as one would
+   * lose a board on the next restart without ever saying so.
+   */
   start(): Promise<string>;
   /**
-   * Stops listening, disconnects every peer and discards every room. Idempotent.
+   * Stops listening, disconnects every peer, writes every room out and discards
+   * them. Idempotent.
    *
-   * Rooms do not survive a stop: their contents are held in memory only, and the
-   * `Awareness` each one owns holds a timer that would otherwise keep the host
-   * process alive. A hub started again serves empty rooms.
+   * Resolves only once the last flush has landed, so a graceful exit closes the
+   * debounce window rather than losing whatever was inside it. Rooms do not
+   * survive a stop: the `Awareness` each one owns holds a timer that would
+   * otherwise keep the host process alive. A hub started again reads them back
+   * off disk.
    */
   stop(): Promise<void>;
   /** Base URL while running, `null` otherwise. */
   readonly url: string | null;
   /** Resolved data directory. */
   readonly dataDir: string;
+  /** Idle period after which a room with no peers is released. */
+  readonly idlePeriodMs: number;
 }
 
 function defaultDataDir(): string {
@@ -69,10 +95,12 @@ function defaultDataDir(): string {
 export function createHub(options: HubOptions = {}): Hub {
   const port = options.port ?? DEFAULT_PORT;
   const dataDir = options.dataDir ?? defaultDataDir();
+  const idlePeriodMs = options.idlePeriodMs ?? DEFAULT_IDLE_PERIOD_MS;
   const serveStatic =
     options.staticDir === undefined ? null : createStaticHandler(options.staticDir);
 
-  const rooms = createRoomRegistry();
+  const persistence = createPersistence(dataDir);
+  const rooms = createRoomRegistry({ persistence, idlePeriodMs });
   const sockets = new WebSocketServer({ noServer: true });
 
   const server = createServer((request, response) => {
@@ -129,15 +157,53 @@ export function createHub(options: HubOptions = {}): Hub {
         webSocket.close(CLOSE_POLICY_VIOLATION, "invalid room slug");
         return;
       }
-      attachConnection(rooms.obtain(slug), webSocket);
+
+      // Reading the room off disk takes a turn of the event loop, and a client
+      // opens by announcing its own state vector. Nothing listens for that
+      // message yet, so the socket is held back until the room is ready rather
+      // than allowed to drop the one message that makes the peer converge.
+      webSocket.pause();
+      rooms.obtain(slug).then(
+        (room) => {
+          if (webSocket.readyState === WebSocket.OPEN) attachConnection(room, webSocket);
+          // Resumed either way. A peer that went away while the room was being
+          // read still has a closing handshake to finish, and a paused receiver
+          // never reads the reply that completes it — which would leave
+          // `server.close()` waiting on a socket that is never going to end.
+          webSocket.resume();
+        },
+        (error: unknown) => {
+          webSocket.resume();
+          webSocket.close(CLOSE_INTERNAL_ERROR, roomFailureReason(error));
+        },
+      );
     });
   });
 
   let url: string | null = null;
 
+  /** Sends every peer away and gives the port back. */
+  async function releasePort(): Promise<void> {
+    // `server.close()` stops accepting and waits for connections to end, but an
+    // upgraded socket never ends on its own — the peers have to be sent away
+    // first or the port would stay bound.
+    for (const webSocket of sockets.clients) webSocket.close(CLOSE_GOING_AWAY, "hub stopping");
+
+    await new Promise<void>((resolve, reject) => {
+      server.close((error) => (error ? reject(error) : resolve()));
+    });
+  }
+
   async function start(): Promise<string> {
     if (url !== null) return url;
 
+    // The bind comes first, before a single byte of the data directory is read
+    // or written. `packages/hub-client` settles the "who runs the hub" race by
+    // starting one per caller and letting everyone who loses the port die on
+    // EADDRINUSE; two processes that had both prepared the data directory
+    // before one of them lost would have appended into the same log, and
+    // interleaved appends do not parse. Preparing first would also report a
+    // directory error to a caller whose only real problem was arriving second.
     await new Promise<void>((resolve, reject) => {
       const onError = (error: Error) => reject(error);
       server.once("error", onError);
@@ -147,31 +213,36 @@ export function createHub(options: HubOptions = {}): Hub {
       });
     });
 
-    const address = server.address() as AddressInfo | null;
-    if (address === null) throw new Error("hub started but reported no address");
-
-    url = `http://${DEFAULT_HOST}:${address.port}`;
-    return url;
+    try {
+      const address = server.address() as AddressInfo | null;
+      if (address === null) throw new Error("hub started but reported no address");
+      await persistence.prepare();
+      url = `http://${DEFAULT_HOST}:${address.port}`;
+      return url;
+    } catch (error) {
+      // Nothing is left holding the port: the next attempt, here or in another
+      // process, has to be able to bind it.
+      await releasePort();
+      throw error;
+    }
   }
 
   async function stop(): Promise<void> {
     if (url === null) return;
 
-    // `server.close()` stops accepting and waits for connections to end, but an
-    // upgraded socket never ends on its own — the peers have to be sent away
-    // first or the port would stay bound.
-    for (const webSocket of sockets.clients) webSocket.close(CLOSE_GOING_AWAY, "hub stopping");
+    await releasePort();
 
-    await new Promise<void>((resolve, reject) => {
-      server.close((error) => (error ? reject(error) : resolve()));
-    });
-
-    // Rooms go with the hub they belonged to. Each one owns an `Awareness` whose
-    // keepalive interval is cleared only by `destroy()`, so a hub that kept its
-    // rooms would release the port and still hold the event loop open: the CLI's
-    // Ctrl-C handler would appear to do nothing.
-    rooms.destroyAll();
-    url = null;
+    try {
+      // Rooms go with the hub they belonged to. Each one owns an `Awareness`
+      // whose keepalive interval is cleared only by `destroy()`, so a hub that
+      // kept its rooms would release the port and still hold the event loop
+      // open: the CLI's Ctrl-C handler would appear to do nothing. Every room
+      // is written out first — the snapshot can only come from a live document.
+      await rooms.shutdown();
+      await persistence.settle();
+    } finally {
+      url = null;
+    }
   }
 
   return {
@@ -181,7 +252,21 @@ export function createHub(options: HubOptions = {}): Hub {
       return url;
     },
     dataDir,
+    idlePeriodMs,
   };
+}
+
+/**
+ * What to tell a peer whose room could not be opened.
+ *
+ * A version the hub cannot read is worth naming — it is the one failure here a
+ * user can act on, by running the build that wrote the log. Anything else is
+ * kept vague on the wire and stays a server-side concern. The reason field of a
+ * close frame is capped at 123 bytes, so it is trimmed well inside that.
+ */
+function roomFailureReason(error: unknown): string {
+  if (error instanceof UnsupportedLogVersionError) return error.message.slice(0, 120);
+  return "room unavailable";
 }
 
 /**

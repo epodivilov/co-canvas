@@ -8,24 +8,33 @@ import { createHub } from "./index";
 import {
   awarenessFrame,
   createClientPool,
+  createDataDirPool,
   MESSAGE_AWARENESS,
   openRawClient,
+  stopHubs,
   syncFrame,
   waitFor,
 } from "./test-helpers";
 
 describe("awareness", () => {
   const clients = createClientPool();
+  const dataDirs = createDataDirPool();
   let hub: Hub | null = null;
 
   afterEach(async () => {
     clients.closeAll();
-    await hub?.stop();
-    hub = null;
+    try {
+      await stopHubs(hub === null ? [] : [hub]);
+    } finally {
+      hub = null;
+      // Unconditional: a scenario that failed with a hub mid-flush would
+      // otherwise leave its directory behind in the OS temp dir forever.
+      await dataDirs.removeAll();
+    }
   });
 
   async function startHub(): Promise<string> {
-    hub = createHub({ port: 0 });
+    hub = createHub({ port: 0, dataDir: await dataDirs.create() });
     return await hub.start();
   }
 
