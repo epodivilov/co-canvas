@@ -152,6 +152,85 @@ describe("what the description covers (R3)", () => {
     expect(section(text, "CONTAINERS")).toContain("group pair: Alpha, Beta");
   });
 
+  it("names an arrow among the contents of the frame it was drawn in", () => {
+    const { text } = describeScene([
+      frame("frm", 0, 0, 600, 400, "Server side"),
+      rect("one", 20, 20, 100, 60, { frameId: "frm" }),
+      label("one-label", "one", "Hub"),
+      rect("two", 20, 260, 100, 60, { frameId: "frm" }),
+      label("two-label", "two", "Log"),
+      arrow(
+        "wire",
+        70,
+        80,
+        [
+          [0, 0],
+          [0, 180],
+        ],
+        { from: "one", to: "two" },
+        { frameId: "frm" },
+      ),
+    ]);
+
+    // Excalidraw gives an arrow drawn inside a frame that frame's id, so an
+    // arrow named on neither side is a reachable hole in the containment.
+    expect(section(text, "CONTAINERS")[0]).toContain("contains Hub, Log, wire");
+    // The arrow line keeps the shape the gate measured: no frame slot on it.
+    expect(section(text, "ARROWS")[0]).not.toContain("frame=");
+    expect(section(text, "ARROWS")[0]).toBe('wire  "Hub" -> "Log"');
+  });
+
+  it("gives a group holding nothing but arrows a CONTAINERS entry of its own", () => {
+    const { text } = describeScene([
+      rect("one", 0, 0, 100, 60),
+      arrow(
+        "a1",
+        100,
+        30,
+        [
+          [0, 0],
+          [200, 0],
+        ],
+        {},
+        { groupIds: ["wires"] },
+      ),
+      arrow(
+        "a2",
+        100,
+        90,
+        [
+          [0, 0],
+          [200, 0],
+        ],
+        {},
+        { groupIds: ["wires"] },
+      ),
+    ]);
+
+    expect(section(text, "CONTAINERS")).toEqual(["group wires: a1, a2"]);
+    expect(section(text, "ARROWS")[0]).not.toContain("group=");
+  });
+
+  it("names a labelled arrow in a container by its label", () => {
+    const { text } = describeScene([
+      rect("one", 0, 0, 100, 60),
+      arrow(
+        "a1",
+        100,
+        30,
+        [
+          [0, 0],
+          [200, 0],
+        ],
+        {},
+        { groupIds: ["wires"] },
+      ),
+      label("a1-label", "a1", "on flush"),
+    ]);
+
+    expect(section(text, "CONTAINERS")).toEqual(["group wires: on flush"]);
+  });
+
   it("names both groups of a node that belongs to two nested ones", () => {
     const { text } = describeScene([
       rect("one", 0, 0, 100, 60, { groupIds: ["inner", "outer"] }),

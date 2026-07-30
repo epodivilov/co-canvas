@@ -148,7 +148,21 @@ export function describeScene(elements: readonly SceneElement[]): SceneDescripti
 
   const grid = buildGrid(summary.extent, nodes);
   const byId = new Map(described.map((element) => [element.id, element]));
-  const groups = [...new Set(nodes.flatMap((node) => node.groupIds))];
+
+  /**
+   * What a frame or a group can be said to hold.
+   *
+   * Arrows are in here because Excalidraw gives an arrow drawn inside a frame
+   * that frame's id, and a person can group arrows with anything else — so an
+   * arrow left out would be named on neither side, and a group of nothing but
+   * arrows would produce no `CONTAINERS` section at all.
+   *
+   * The other half of the containment stays where it was: the `frame=` and
+   * `group=` slots belong to node lines only. An arrow line keeps exactly the
+   * shape the gate measured, and only the membership list grows.
+   */
+  const held = [...nodes, ...arrows];
+  const groups = [...new Set(held.flatMap((element) => element.groupIds))];
 
   // Two spaces in front of every entry, and none in front of a heading: the
   // indent is what tells a reader — and the scenarios — where a section ends,
@@ -159,7 +173,7 @@ export function describeScene(elements: readonly SceneElement[]): SceneDescripti
     ["NODES", ...nodes.map((node) => entry(nodeLine(node, grid, byId)))],
     ...(frames.length + groups.length === 0
       ? []
-      : [["CONTAINERS", ...containerLines(frames, groups, nodes, grid).map(entry)]]),
+      : [["CONTAINERS", ...containerLines(frames, groups, held, grid).map(entry)]]),
     ["ARROWS", ...arrows.map((arrow) => entry(arrowLine(arrow, byId)))],
     [
       "GEOMETRY (x, y, width, height)",
@@ -445,20 +459,27 @@ function nodeLine(node: Described, grid: Grid, byId: ReadonlyMap<string, Describ
   ].join("  ");
 }
 
+/**
+ * The frame and group lines.
+ *
+ * `held` is everything a container can hold — the nodes in reading order, then
+ * the arrows in document order — rather than the nodes alone.
+ */
 function containerLines(
   frames: readonly Described[],
   groups: readonly string[],
-  nodes: readonly Described[],
+  held: readonly Described[],
   grid: Grid,
 ): string[] {
   const lines = frames.map((frame) => {
-    const held = nodes.filter((node) => node.frameId === frame.id);
+    const inside = held.filter((element) => element.frameId === frame.id);
     const name = frame.name === null ? NO_NAME : quote(frame.name);
-    return `frame ${frame.id} ${name} cells ${cellRange(frame, grid)}: contains ${members(held)}`;
+    return `frame ${frame.id} ${name} cells ${cellRange(frame, grid)}: contains ${members(inside)}`;
   });
 
   for (const group of groups) {
-    lines.push(`group ${group}: ${members(nodes.filter((node) => node.groupIds.includes(group)))}`);
+    const inside = held.filter((element) => element.groupIds.includes(group));
+    lines.push(`group ${group}: ${members(inside)}`);
   }
   return lines;
 }
@@ -518,9 +539,11 @@ function frameReference(id: string, byId: ReadonlyMap<string, Described>): strin
  * Unquoted, as the format has it — and folded all the same, because a label a
  * person typed across three lines would otherwise split this line into three.
  */
-function members(nodes: readonly Described[]): string {
-  if (nodes.length === 0) return "(empty)";
-  return nodes.map((node) => (node.label === null ? node.id : oneLine(node.label))).join(", ");
+function members(elements: readonly Described[]): string {
+  if (elements.length === 0) return "(empty)";
+  return elements
+    .map((element) => (element.label === null ? element.id : oneLine(element.label)))
+    .join(", ");
 }
 
 // ---------------------------------------------------------------------------
