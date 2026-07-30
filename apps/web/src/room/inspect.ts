@@ -12,6 +12,16 @@ export interface InspectedElement {
   /** Set on image elements; the key their binary is stored under. */
   fileId: string | null;
   isDeleted: boolean;
+  /** Set on a bound text element; the container it belongs to. */
+  containerId: string | null;
+  /** Ids of the labels and arrows bound to this element. */
+  boundElementIds: string[];
+  /** Element an arrow's first point is bound to. */
+  startBindingId: string | null;
+  /** Element an arrow's last point is bound to. */
+  endBindingId: string | null;
+  /** Frame this element belongs to. */
+  frameId: string | null;
 }
 
 /** One entry of the room's `Y.Array`, with the key that decides z-order. */
@@ -70,6 +80,24 @@ function readString(value: unknown): string {
   return typeof value === "string" ? value : "";
 }
 
+function readId(value: unknown): string | null {
+  return typeof value === "string" ? value : null;
+}
+
+/** The element a `startBinding` or `endBinding` names, if there is one. */
+function readBinding(value: unknown): string | null {
+  if (value === null || typeof value !== "object") return null;
+  return readId((value as { elementId?: unknown }).elementId);
+}
+
+function readBoundElementIds(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((entry) => {
+    const id = readId((entry as { id?: unknown } | null)?.id);
+    return id === null ? [] : [id];
+  });
+}
+
 function normalise(element: Record<string, unknown>): InspectedElement {
   return {
     id: readString(element.id),
@@ -80,6 +108,11 @@ function normalise(element: Record<string, unknown>): InspectedElement {
     backgroundColor: readString(element.backgroundColor),
     fileId: typeof element.fileId === "string" ? element.fileId : null,
     isDeleted: element.isDeleted === true,
+    containerId: readId(element.containerId),
+    boundElementIds: readBoundElementIds(element.boundElements),
+    startBindingId: readBinding(element.startBinding),
+    endBindingId: readBinding(element.endBinding),
+    frameId: readId(element.frameId),
   };
 }
 

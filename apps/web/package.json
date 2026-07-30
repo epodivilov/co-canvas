@@ -22,6 +22,8 @@
   },
   "devDependencies": {
     "@co-canvas/hub": "workspace:*",
+    "@co-canvas/mcp-bridge": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "@playwright/test": "^1.62.0",
     "@types/node": "^26.1.2",
     "@types/react": "^19.2.17",

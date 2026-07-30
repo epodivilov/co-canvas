@@ -361,6 +361,59 @@ export async function hubHealth(port: number): Promise<string | null> {
   }
 }
 
+/**
+ * Excalidraw's own `BOUND_TEXT_PADDING`, restated here so the geometry
+ * scenarios have a number to compare against without importing the package.
+ */
+export const BOUND_TEXT_PADDING = 5;
+
+/**
+ * One entry of a room's element array, read straight off the document.
+ *
+ * Deliberately not routed through `elements.ts`: a scenario that read the
+ * document through the same code that wrote it could not tell a wrong layout
+ * from a right one.
+ */
+export interface StoredEntry {
+  readonly pos: string;
+  readonly el: Record<string, unknown>;
+}
+
+/** Every entry of a room's element array, in z-order — the `pos` sort. */
+export function roomEntries(doc: Y.Doc): StoredEntry[] {
+  return doc
+    .getArray<Y.Map<unknown>>("elements")
+    .toArray()
+    .map((entry) => ({
+      pos: String(entry.get("pos")),
+      el: entry.get("el") as Record<string, unknown>,
+    }))
+    .sort((a, b) => (a.pos < b.pos ? -1 : a.pos > b.pos ? 1 : 0));
+}
+
+/** Every element of a room, in z-order. */
+export function roomScene(doc: Y.Doc): Record<string, unknown>[] {
+  return roomEntries(doc).map((entry) => entry.el);
+}
+
+/** The ids of a room's elements, in z-order. */
+export function roomIds(doc: Y.Doc): string[] {
+  return roomScene(doc).map((element) => String(element.id));
+}
+
+/** One element of a room by id, or `undefined`. */
+export function roomElement(doc: Y.Doc, id: string): Record<string, unknown> | undefined {
+  return roomScene(doc).find((element) => element.id === id);
+}
+
+/** Waits until a peer's copy of the room holds exactly `count` elements. */
+export async function waitForCount(peer: RoomPeer, count: number): Promise<void> {
+  await waitFor(
+    () => roomScene(peer.doc).length === count,
+    `the room never reached ${count} elements (saw ${roomScene(peer.doc).length})`,
+  );
+}
+
 /** All the text a tool result carries, joined — the summary a text-only harness shows. */
 export function textOf(result: CallToolResult): string {
   return result.content

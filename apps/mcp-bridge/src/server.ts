@@ -4,6 +4,7 @@ import { z } from "zod";
 import { boardUrl } from "./board.ts";
 import type { CommandSpec } from "./command.ts";
 import { createRoomConnections } from "./connections.ts";
+import { registerDrawingTools } from "./drawing.ts";
 import type { HubAccess } from "./hub.ts";
 import { acquireHub, listHubRooms } from "./hub.ts";
 import { openInBrowser } from "./opener.ts";
@@ -40,7 +41,9 @@ const SERVER_INFO = { name: "co-canvas", version: "0.0.0" } as const;
 const INSTRUCTIONS =
   "co-canvas boards are live whiteboards shared with a human in their browser." +
   " Call list_rooms to see what is open, create_room to make a board (idempotent)," +
-  " and open_room to get a board's URL and show it to the human.";
+  " and open_room to get a board's URL and show it to the human." +
+  " Draw with add_elements, update_elements and delete_elements: everything you draw" +
+  " appears in the human's browser at once, without them reloading anything.";
 
 /** Shape of a room in every tool's structured output. */
 const roomShape = {
@@ -173,6 +176,10 @@ export function createBridge(options: BridgeOptions): Bridge {
       };
     },
   );
+
+  // Registered on the same factory and handed the same connection cache: a
+  // board an agent has drawn on is a board it is already a peer of.
+  registerDrawingTools(server, { access, connections });
 
   return {
     server,

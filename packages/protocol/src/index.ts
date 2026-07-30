@@ -29,6 +29,20 @@ export const HUB_SERVICE_ID = "co-canvas-hub";
  */
 export const DATA_DIR_NAME = ".co-canvas";
 
+/**
+ * Key of the room document's element array — a `Y.Array` of `Y.Map`s, each
+ * holding the whole Excalidraw element under `el` and its fractional z-order
+ * key under `pos`.
+ *
+ * Shared rather than repeated: the browser and the MCP bridge both open the
+ * same document, and a mismatch would have one of them writing into a document
+ * nobody renders, with no error anywhere.
+ */
+export const ELEMENTS_KEY = "elements";
+
+/** Key of the room document's asset map, where image binaries are stored. */
+export const ASSETS_KEY = "assets";
+
 /** Body of `GET /health`, the contract between the hub and its clients. */
 export interface HubHealth {
   service: typeof HUB_SERVICE_ID;
