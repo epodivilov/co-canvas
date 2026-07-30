@@ -21,7 +21,17 @@ export interface RoomConnection {
 export interface RoomConnections {
   /** The connection for `slug`, opening and syncing one on first use. */
   open(hubUrl: string, slug: string): Promise<RoomConnection>;
-  /** Tears every connection down. */
+  /**
+   * Tears every connection down, and empties the cache at once.
+   *
+   * A connection that is still opening is torn down when its `open` settles
+   * rather than here, so this returning is not a promise that every socket has
+   * already gone: a room still mid-sync keeps one for as long as its sync has
+   * left to run. Nothing leaks either way, and the only caller in production is
+   * the shutdown path, which exits the process immediately afterwards — so the
+   * lateness is unobservable there and cancelling an in-flight sync would buy
+   * machinery nobody can see the effect of.
+   */
   closeAll(): void;
 }
 

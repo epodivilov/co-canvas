@@ -83,4 +83,29 @@ describe("hub acquisition", () => {
     // Nothing came up on the port either, so a later call has the same problem.
     await waitFor(async () => (await hubHealth(port)) === null, "something bound the port");
   }, 20_000);
+
+  it("survives a start command that cannot even be resolved (R5)", async () => {
+    const port = await freePort();
+    // What an unbuilt `apps/hub-cli` does to the default resolution. It is the
+    // reason the factory takes a function rather than a command: resolving at
+    // startup would turn this into a bridge that never came up, taking the
+    // ability to find an already-running hub with it.
+    const bridge = await harness.connect({
+      hubPort: port,
+      hubCommand: () => {
+        throw new Error("cannot find the co-canvas hub entry point (@co-canvas/hub-cli)");
+      },
+    });
+
+    const first = await bridge.call("create_room", { slug: "alpha" });
+
+    expect(first.isError).toBe(true);
+    expect(textOf(first)).toContain("@co-canvas/hub-cli");
+    expect(textOf(first)).toContain("CO_CANVAS_HUB_CMD");
+    // And the session is still there to be told about it.
+    const second = await bridge.call("list_rooms");
+    expect(second.isError).toBe(true);
+    const tools = await bridge.client.listTools();
+    expect(tools.tools).toHaveLength(3);
+  }, 20_000);
 });
