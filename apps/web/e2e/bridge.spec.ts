@@ -15,11 +15,15 @@ const EXCALIFONT_AT_20 = "20px Excalifont, Xiaolai, Segoe UI Emoji";
  *
  * The bridge measures a label by summing Excalifont's advance widths and adding
  * a fixed allowance per character, because a rasterizer rounds each glyph's
- * advance and applies pair kerning that the font's plain metrics do not
- * describe. The allowance is what keeps the stored width from ever falling
- * under what a browser draws; this is the price it charges for that.
+ * advance, applies pair kerning, and draws a precomposed letter's mark even
+ * when the font's advance makes no room for it. None of that is in `hmtx`.
+ *
+ * This is the price of that allowance rather than a quality target: at
+ * `WIDTH_SAFETY_EM` = 0.2 a long Latin label lands about 40 % over. It is here
+ * to catch a width function that has gone grossly wrong, while the assertion
+ * below it — never under the browser — is the one carrying R2.
  */
-const WIDTH_TOLERANCE = 1.35;
+const WIDTH_TOLERANCE = 1.45;
 
 let bridge: BridgeClient | null = null;
 let observer: RoomObserver | null = null;
@@ -182,6 +186,12 @@ test.describe("what a browser sees", () => {
       short: "Auth",
       sentence: "Authentication service handles login and token refresh",
       capitals: "WAVE FORM XYZ",
+      // The two glyphs Chromium draws furthest past the advance Excalifont's
+      // own metrics claim for them: a run of `j`, whose pairs kern apart, and a
+      // run of `ľ`, which the font gives no more width than a bare `l`. Both
+      // under-measured before the allowance was sized to them.
+      descenders: "j".repeat(100),
+      caron: "ľ".repeat(30),
     };
     await client.call("add_elements", {
       slug: "measured",
@@ -190,12 +200,14 @@ test.describe("what a browser sees", () => {
         id,
         x: 100,
         y: 100 + n * 200,
-        width: 600,
+        // Wide enough that none of these labels wraps, so each comparison is
+        // one stored line against the same unwrapped string in the browser.
+        width: 1300,
         height: 150,
         label: { text },
       })),
     });
-    await expect.poll(async () => (await liveIds(page)).length).toBe(6);
+    await expect.poll(async () => (await liveIds(page)).length).toBe(10);
 
     // Excalidraw loads a scene's fonts lazily; measuring before Excalifont is
     // there would compare the bridge against a fallback family.
@@ -217,6 +229,9 @@ test.describe("what a browser sees", () => {
     for (const [index, [id, text]] of Object.entries(labels).entries()) {
       const label = scene.find((element) => element.containerId === id);
       expect(label, `no label bound to ${id}`).toBeDefined();
+      // A wrapped label would put its widest line against the browser's whole
+      // string, which is a different question from the one being asked.
+      expect(String(label?.text), `${id} wrapped`).not.toContain("\n");
       const stored = Number(label?.width);
       const browser = measured[index] ?? 0;
       expect(browser, `browser measured nothing for ${text}`).toBeGreaterThan(0);

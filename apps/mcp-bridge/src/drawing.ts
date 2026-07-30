@@ -35,12 +35,18 @@ export interface DrawingDeps {
   readonly connections: RoomConnections;
 }
 
+/** Fields of a bound label that only its container may decide. */
+const LABEL_GEOMETRY_FIELDS = ["x", "y", "width", "height", "angle"] as const;
+
 /** Fields a re-fitted label takes from the conversion, and nothing else. */
 const LABEL_FIELDS = [
   "x",
   "y",
   "width",
   "height",
+  // Excalidraw keeps a bound text at its container's angle; leaving it flat
+  // under a turned container is a state the app itself never produces.
+  "angle",
   "text",
   "originalText",
   "fontSize",
@@ -247,6 +253,22 @@ async function applyPatch(
   byId: ReadonlyMap<string, SceneElement>,
 ): Promise<SceneElement[]> {
   const { id: _id, label, roundness, text, ...fields } = patch;
+
+  // A bound label's box is its container's to decide: the position, the
+  // wrapping and the size all come out of the container's geometry, and moving
+  // one by hand breaks the fit R2 requires with nothing to put it back. The
+  // container is what a caller changes, and the label follows it.
+  if (typeof stored.containerId === "string") {
+    const owned = LABEL_GEOMETRY_FIELDS.filter((field) => patch[field] !== undefined);
+    if (owned.length > 0 || text !== undefined) {
+      const named = [...owned, ...(text === undefined ? [] : ["text"])].join(", ");
+      throw new Error(
+        `element "${stored.id}" is the label of "${String(stored.containerId)}";` +
+          ` change ${named} through its container instead`,
+      );
+    }
+  }
+
   const next: SceneElement = { ...stored };
 
   for (const [key, value] of Object.entries(fields)) {
@@ -261,11 +283,6 @@ async function applyPatch(
   if (text !== undefined) {
     if (stored.type !== "text") {
       throw new Error(`element "${stored.id}" is a ${stored.type}; only a text element has text`);
-    }
-    if (typeof stored.containerId === "string") {
-      throw new Error(
-        `element "${stored.id}" is a label; change it through its container's \`label\` instead`,
-      );
     }
     next.text = text;
     next.originalText = text;
@@ -304,6 +321,8 @@ async function refit(
     y: Number(container.y),
     width: Number(container.width),
     height: Number(container.height),
+    // Carried so upstream hands the label its container's angle back.
+    angle: Number(container.angle ?? 0),
     label: { id: label.id, text },
   };
   // An arrow's label is placed along its points, so they have to travel too.

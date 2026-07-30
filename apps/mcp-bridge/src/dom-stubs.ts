@@ -32,8 +32,6 @@ export const STUB_MEASURE_TEXT_ERROR =
  */
 function stubContext(): Record<string, unknown> {
   return {
-    // Read with `in` during a feature probe, so it has to be present and the
-    // context itself has to be an object rather than null.
     filter: "none",
     measureText(): never {
       throw new Error(STUB_MEASURE_TEXT_ERROR);
@@ -41,10 +39,27 @@ function stubContext(): Record<string, unknown> {
   };
 }
 
+/**
+ * An element that answers the probes a DOM library makes of one.
+ *
+ * `getContext` returning an object rather than `null` is load bearing, and is
+ * proven by removal: something reads `"filter" in getContext("2d")`, and `in`
+ * needs an object.
+ *
+ * The members below — `style`, `classList`, `setAttribute`, `appendChild`, and
+ * `filter` itself — are **not** individually required by
+ * `@excalidraw/excalidraw@0.18.1` with React 19. Removing all five together
+ * leaves both proven consumption routes green: the conversion scenarios through
+ * Vite's pipeline, and the built bundle spawned as a process. They are kept as
+ * insurance against a build mode that reaches a probe neither route does, not
+ * because anything here was seen to need them. Read this as a defensive list
+ * rather than a contract — if you are trimming it, measure.
+ *
+ * The six globals in {@link installDomStubs} are a different matter: each one
+ * was removed on its own and each removal fails the conversion.
+ */
 function stubElement(): Record<string, unknown> {
   return {
-    // React's DOM probes read `style` and call `setAttribute` at module scope;
-    // neither is optional.
     style: {},
     classList: {},
     setAttribute(): void {},

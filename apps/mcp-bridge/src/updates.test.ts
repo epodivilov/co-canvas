@@ -172,6 +172,75 @@ describe("update_elements", () => {
     if (container !== undefined && label !== undefined) fits(container, label);
   });
 
+  it("turns a bound label with the container it belongs to (R6)", async () => {
+    const hub = await harness.startHub();
+    const bridge = await harness.connect({ hubPort: hub.port });
+    await bridge.call("create_room", { slug: "alpha" });
+    const peer = await harness.openPeer(hub.url, "alpha");
+
+    await bridge.call("add_elements", {
+      slug: "alpha",
+      elements: [
+        {
+          type: "rectangle",
+          id: "box",
+          x: 0,
+          y: 0,
+          width: 200,
+          height: 100,
+          label: { text: "Auth" },
+        },
+      ],
+    });
+    await waitForCount(peer, 2);
+
+    await bridge.call("update_elements", { slug: "alpha", patches: [{ id: "box", angle: 0.4 }] });
+
+    await waitFor(() => roomElement(peer.doc, "box")?.angle === 0.4, "the container never turned");
+    // Excalidraw keeps a bound text at its container's angle; a label left flat
+    // under a turned box is a state the app itself never produces.
+    const label = roomScene(peer.doc).find((element) => element.type === "text");
+    expect(label?.angle).toBe(0.4);
+  });
+
+  it("refuses a patch that would move a label out of its container (R2, R6)", async () => {
+    const hub = await harness.startHub();
+    const bridge = await harness.connect({ hubPort: hub.port });
+    await bridge.call("create_room", { slug: "alpha" });
+    const peer = await harness.openPeer(hub.url, "alpha");
+
+    await bridge.call("add_elements", {
+      slug: "alpha",
+      elements: [
+        {
+          type: "rectangle",
+          id: "box",
+          x: 0,
+          y: 0,
+          width: 200,
+          height: 100,
+          label: { text: "Auth" },
+        },
+      ],
+    });
+    await waitForCount(peer, 2);
+    const label = roomScene(peer.doc).find((element) => element.type === "text");
+    const before = JSON.stringify(roomScene(peer.doc));
+
+    const result = await bridge.call("update_elements", {
+      slug: "alpha",
+      patches: [{ id: String(label?.id), x: 9000 }],
+    });
+
+    // A label's box belongs to its container. Moving it by hand breaks the fit
+    // R2 requires, and nothing would ever put it back.
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toContain(String(label?.id));
+    expect(textOf(result)).toContain("box");
+    await settle();
+    expect(JSON.stringify(roomScene(peer.doc))).toBe(before);
+  });
+
   it("refuses a patch naming an id the room does not hold (R6)", async () => {
     const hub = await harness.startHub();
     const bridge = await harness.connect({ hubPort: hub.port });

@@ -15,19 +15,29 @@ import {
 /**
  * Extra width allowed per character, in em.
  *
- * A font's advance widths describe the glyphs; a browser draws something
- * slightly different. It rounds each advance to whole device pixels and applies
- * the pair kerning in the font's `GPOS` table, and neither is recoverable from
- * the plain metrics. Measured against Chromium's `measureText` over every
- * printable-ASCII glyph of Excalifont at 16, 20, 28 and 36 px, in runs of 1, 2,
- * 5, 10 and 20, the browser never exceeded the summed advances by more than
- * 0.117 em per character — worst case `j`, whose pairs kern apart.
+ * A font's advance widths describe the glyphs; a browser draws something else.
+ * It rounds each advance to whole device pixels, it applies the pair kerning in
+ * the font's `GPOS` table, and for a precomposed letter whose advance Excalifont
+ * sets no wider than the bare base letter — `ľ` is given exactly the width of
+ * `l` — it draws the mark anyway and charges for it. None of that is
+ * recoverable from `hmtx` alone.
  *
- * The allowance is what keeps a stored label from ever being narrower than what
- * a browser draws, at the price of containers roughly a tenth wider than a
- * person typing the same label would get.
+ * Sized from measurement rather than from a guess. Every one of the 561
+ * codepoints the shipped table covers was repeated to 400 characters and
+ * measured against Chromium at 12, 16, 20, 28 and 36 px, with each subset
+ * registered under its own `unicode-range` so the right face answers for each
+ * glyph. The largest excess over the summed advances was 0.1913 em per
+ * character — `ľ` at 12 px — followed by `j` at 0.1217 em, whose pairs kern
+ * apart. Three codepoints exceed 0.12 em; one exceeds 0.14.
+ *
+ * The allowance is what keeps a stored label from being narrower than what a
+ * browser draws. It is not free: a typical Latin label ends up 35–40 % wider
+ * than the same string measured in a browser, so containers grow and labels
+ * wrap sooner than they strictly need to. Over-measuring is the safe direction
+ * — the alternative is text spilling out of its box — but a table derived from
+ * a browser rather than from `hmtx` would buy most of that width back.
  */
-export const WIDTH_SAFETY_EM = 0.12;
+export const WIDTH_SAFETY_EM = 0.2;
 
 /**
  * The width of one line, in pixels.

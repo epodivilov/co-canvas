@@ -164,6 +164,37 @@ describe("arrows", () => {
     expect(arrow).toMatchObject({ x: 110, y: 20, width: 180, height: 40 });
   });
 
+  it("refuses an arrow bound to something that is not a shape (R3)", async () => {
+    const hub = await harness.startHub();
+    const bridge = await harness.connect({ hubPort: hub.port });
+    await bridge.call("create_room", { slug: "alpha" });
+    const peer = await harness.openPeer(hub.url, "alpha");
+
+    await bridge.call("add_elements", {
+      slug: "alpha",
+      elements: [
+        { type: "rectangle", id: "left", x: 0, y: 0, width: 100, height: 100 },
+        { type: "text", id: "note", x: 300, y: 0, text: "hello" },
+      ],
+    });
+    await waitForCount(peer, 2);
+
+    const result = await bridge.call("add_elements", {
+      slug: "alpha",
+      elements: [{ type: "arrow", id: "flow", start: { id: "left" }, end: { id: "note" } }],
+    });
+
+    // A frame, a line or another arrow makes upstream's converter reach for a
+    // bound element it never built and die on `undefined.id`; a text element
+    // binds, but to a copy of itself this bridge never writes back.
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toContain("note");
+    expect(textOf(result)).toContain("rectangle, an ellipse or a diamond");
+    await settle();
+    expect(roomScene(peer.doc)).toHaveLength(2);
+    expect(roomElement(peer.doc, "left")?.boundElements).toBeNull();
+  });
+
   it("refuses an arrow bound to an id present nowhere (R3, R5)", async () => {
     const hub = await harness.startHub();
     const bridge = await harness.connect({ hubPort: hub.port });

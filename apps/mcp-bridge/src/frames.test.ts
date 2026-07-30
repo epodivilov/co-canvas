@@ -135,6 +135,31 @@ describe("frames", () => {
     expect(roomElement(peer.doc, "loner")?.groupIds).toEqual([]);
   });
 
+  it("refuses a frame naming a child the room already holds (R4)", async () => {
+    const hub = await harness.startHub();
+    const bridge = await harness.connect({ hubPort: hub.port });
+    await bridge.call("create_room", { slug: "alpha" });
+    const peer = await harness.openPeer(hub.url, "alpha");
+
+    await bridge.call("add_elements", { slug: "alpha", elements: CHILDREN });
+    await waitForCount(peer, 2);
+
+    const result = await bridge.call("add_elements", {
+      slug: "alpha",
+      elements: [{ type: "frame", id: "group", children: ["one", "two"] }],
+    });
+
+    // Taking an element into a frame after the fact is a move, which this task
+    // does not do — and upstream would throw its own "wasn't mapped correctly"
+    // from inside the converter rather than say so.
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toContain("one");
+    expect(textOf(result)).toContain("already in this room");
+    await settle();
+    expect(roomIds(peer.doc)).toEqual(["one", "two"]);
+    expect(roomElement(peer.doc, "one")?.frameId).toBeNull();
+  });
+
   it("refuses a frame naming a child that exists nowhere (R4, R5)", async () => {
     const hub = await harness.startHub();
     const bridge = await harness.connect({ hubPort: hub.port });
