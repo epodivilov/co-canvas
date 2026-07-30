@@ -110,11 +110,16 @@ describe("atomic publication", () => {
 
   afterEach(async () => {
     clients.closeAll();
-    for (const created of hubs) await created.stop();
-    hubs.clear();
-    probe.watched.length = 0;
-    probe.reset();
-    await dataDirs.removeAll();
+    try {
+      for (const created of hubs) await created.stop();
+    } finally {
+      hubs.clear();
+      probe.watched.length = 0;
+      probe.reset();
+      // Unconditional: a scenario that failed with a hub mid-flush would
+      // otherwise leave its directory behind in the OS temp dir forever.
+      await dataDirs.removeAll();
+    }
   });
 
   it("replaces a compacted log wholesale and never writes a partial one (R5)", async () => {

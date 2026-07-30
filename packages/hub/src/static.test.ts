@@ -12,9 +12,14 @@ describe("static serving", () => {
   let hub: Hub | null = null;
 
   afterEach(async () => {
-    await hub?.stop();
-    hub = null;
-    await dataDirs.removeAll();
+    try {
+      await hub?.stop();
+    } finally {
+      hub = null;
+      // Unconditional: a scenario that failed with a hub mid-flush would
+      // otherwise leave its directory behind in the OS temp dir forever.
+      await dataDirs.removeAll();
+    }
   });
 
   async function startHub(staticDir?: string): Promise<string> {

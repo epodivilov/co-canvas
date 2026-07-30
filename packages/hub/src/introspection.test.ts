@@ -21,8 +21,13 @@ describe("introspection", () => {
 
   afterEach(async () => {
     clients.closeAll();
-    await hub.stop();
-    await dataDirs.removeAll();
+    try {
+      await hub.stop();
+    } finally {
+      // Unconditional: a scenario that failed with a hub mid-flush would
+      // otherwise leave its directory behind in the OS temp dir forever.
+      await dataDirs.removeAll();
+    }
   });
 
   it("lists every live room with its peer count and document size (R6)", async () => {
