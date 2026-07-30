@@ -1,8 +1,9 @@
+import type { FileHandle } from "node:fs/promises";
 import { open, readdir, rename, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { RoomSlug } from "@co-canvas/protocol";
 import { isRoomSlug } from "@co-canvas/protocol";
-import { decodeHeader, LOG_HEADER_BYTES } from "./log-format";
+import { decodeHeader, LOG_HEADER_BYTES, LOG_VERSION } from "./log-format";
 import { LOG_SUFFIX, roomsDir } from "./room-log";
 
 /** Name of the derived index sitting beside the `rooms/` directory. */
@@ -77,22 +78,38 @@ export async function rebuildRoomIndex(dataDir: string): Promise<Map<RoomSlug, R
 }
 
 /**
- * Reads the creation time out of a log's header without touching its frames.
+ * Reads the creation time out of a log's header without touching its frames,
+ * or reports `null` for anything it cannot read.
+ *
+ * Total on purpose. This runs once per board while the index is rebuilt, and an
+ * error escaping it would turn one unreadable file into a hub that refuses to
+ * start at all — strictly worse than the state a rebuild exists to recover
+ * from. Opening the file is inside the guard for the same reason: a log with no
+ * read permission fails there rather than at the read.
  *
  * Creation time lives in the header rather than only in the index precisely so
  * that it survives a rebuild — the filesystem's own timestamps do not, since a
- * copied or restored directory carries whatever times the copy produced.
+ * copied or restored directory carries whatever times the copy produced. A log
+ * from a version this build does not know is not decoded here either: the board
+ * still belongs in the index, just with a creation time off the filesystem.
  */
 async function readCreatedAt(path: string): Promise<number | null> {
-  const handle = await open(path, "r");
+  let handle: FileHandle;
+  try {
+    handle = await open(path, "r");
+  } catch {
+    return null;
+  }
+
   try {
     const header = Buffer.alloc(LOG_HEADER_BYTES);
     const { bytesRead } = await handle.read(header, 0, LOG_HEADER_BYTES, 0);
-    return decodeHeader(header.subarray(0, bytesRead))?.createdAt ?? null;
+    const decoded = decodeHeader(header.subarray(0, bytesRead));
+    return decoded !== null && decoded.version === LOG_VERSION ? decoded.createdAt : null;
   } catch {
     return null;
   } finally {
-    await handle.close();
+    await handle.close().catch(() => {});
   }
 }
 
