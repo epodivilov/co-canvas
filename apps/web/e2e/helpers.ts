@@ -160,6 +160,29 @@ export async function drawRect(
   await page.keyboard.press("Escape");
 }
 
+/** Draws a freehand stroke the way a person would: pick the pencil, then drag. */
+export async function drawFreehand(
+  page: Page,
+  points: readonly (readonly [number, number])[],
+): Promise<void> {
+  const [first, ...rest] = points;
+  if (first === undefined) throw new Error("a stroke needs at least one point");
+  await page.keyboard.press("x");
+  await page.mouse.move(first[0], first[1]);
+  await page.mouse.down();
+  for (const [x, y] of rest) await page.mouse.move(x, y, { steps: 4 });
+  await page.mouse.up();
+  await page.keyboard.press("Escape");
+}
+
+/** Writes a loose text note: pick the text tool, click, type, commit. */
+export async function writeNote(page: Page, x: number, y: number, text: string): Promise<void> {
+  await page.keyboard.press("t");
+  await page.mouse.click(x, y);
+  await page.keyboard.type(text);
+  await page.keyboard.press("Escape");
+}
+
 /** Drags whatever sits under (x, y) by (dx, dy) with the selection tool. */
 export async function dragFrom(
   page: Page,

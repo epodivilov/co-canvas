@@ -1,0 +1,30 @@
+SCENE: 5 nodes, 4 arrows, extent 80,60 .. 1060,540
+GRID: coarse cells ~270x150px, columns A..D left→right, rows 1..4 top→bottom
+
+NODES
+  browser  "Browser Canvas"  rectangle  cell A1
+  hub  "Hub (y-websocket)"  rectangle  cell B1  frame="Server side"
+  bridge  "MCP Bridge"  rectangle  cell D1
+  overview  "Overview UI"  rectangle  cell A2
+  log  "File Log"  rectangle  cell B3  frame="Server side"
+
+CONTAINERS
+  frame server "Server side" cells B1..C4: contains Hub (y-websocket), File Log
+
+ARROWS
+  opens  "Browser Canvas" -> "Hub (y-websocket)"
+  flushes  "Hub (y-websocket)" -> "File Log"  "on flush"
+  draws  "MCP Bridge" -> "Hub (y-websocket)"
+  lists  "Overview UI" -> "Browser Canvas"
+
+GEOMETRY (x, y, width, height)
+  browser  80, 100, 200, 90
+  hub  460, 120, 220, 100
+  bridge  860, 120, 200, 90
+  overview  80, 300, 200, 90
+  log  460, 380, 220, 100
+  server  420, 60, 320, 480  (frame)
+  opens  from (284,148) to (456,154)
+  flushes  from (570,224) to (570,376)
+  draws  from (856,168) to (684,172)
+  lists  from (180,296) to (180,194)

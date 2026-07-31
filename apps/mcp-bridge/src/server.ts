@@ -4,6 +4,7 @@ import { z } from "zod";
 import { boardUrl } from "./board.ts";
 import type { CommandSpec } from "./command.ts";
 import { createRoomConnections } from "./connections.ts";
+import { registerDescribeTool } from "./describing.ts";
 import { registerDrawingTools } from "./drawing.ts";
 import type { HubAccess } from "./hub.ts";
 import { acquireHub, listHubRooms } from "./hub.ts";
@@ -43,7 +44,9 @@ const INSTRUCTIONS =
   " Call list_rooms to see what is open, create_room to make a board (idempotent)," +
   " and open_room to get a board's URL and show it to the human." +
   " Draw with add_elements, update_elements and delete_elements: everything you draw" +
-  " appears in the human's browser at once, without them reloading anything.";
+  " appears in the human's browser at once, without them reloading anything." +
+  " Call describe_scene to read a board before changing it — it reports what is there and" +
+  " exactly where, including whatever the human has drawn or moved by hand.";
 
 /** Shape of a room in every tool's structured output. */
 const roomShape = {
@@ -180,6 +183,7 @@ export function createBridge(options: BridgeOptions): Bridge {
   // Registered on the same factory and handed the same connection cache: a
   // board an agent has drawn on is a board it is already a peer of.
   registerDrawingTools(server, { access, connections });
+  registerDescribeTool(server, { access, connections });
 
   return {
     server,

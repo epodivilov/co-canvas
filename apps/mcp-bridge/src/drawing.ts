@@ -9,8 +9,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type * as Y from "yjs";
 import { z } from "zod";
-import { boardUrl } from "./board.ts";
-import type { RoomConnections } from "./connections.ts";
 import type { BoundRef } from "./convert.ts";
 import { convertSkeletons } from "./convert.ts";
 import type { SceneElement } from "./elements.ts";
@@ -22,18 +20,10 @@ import {
   replaceElement,
 } from "./elements.ts";
 import { loadExcalidraw } from "./excalidraw.ts";
-import type { HubAccess } from "./hub.ts";
-import { acquireHub, listHubRooms } from "./hub.ts";
+import type { RoomAccess } from "./room.ts";
+import { openRoom } from "./room.ts";
 import type { ElementPatch, ElementSkeleton } from "./skeleton.ts";
 import { elementPatchSchema, elementSkeletonSchema } from "./skeleton.ts";
-import { assertRoomSlug } from "./slug.ts";
-
-/** What the drawing tools need from the rest of the bridge. */
-export interface DrawingDeps {
-  readonly access: HubAccess;
-  /** CC-15's per-room cache. These tools open no connection of their own. */
-  readonly connections: RoomConnections;
-}
 
 /** Fields of a bound label that only its container may decide. */
 const LABEL_GEOMETRY_FIELDS = ["x", "y", "width", "height", "angle"] as const;
@@ -65,7 +55,7 @@ const resultShape = {
   ids: z.array(z.string()).describe("Ids of the elements this call touched, in order."),
 };
 
-export function registerDrawingTools(server: McpServer, deps: DrawingDeps): void {
+export function registerDrawingTools(server: McpServer, deps: RoomAccess): void {
   server.registerTool(
     "add_elements",
     {
@@ -129,26 +119,6 @@ export function registerDrawingTools(server: McpServer, deps: DrawingDeps): void
       return answer(slug, room.url, removed, `Removed ${count(removed.length)} from "${slug}"`);
     },
   );
-}
-
-/**
- * The document behind a board, and the URL it opens at.
- *
- * The room has to exist first. The hub creates a room on first connect, so the
- * check happens before the socket does — otherwise a typo would quietly make a
- * second board and draw on it, which is the same stance `open_room` takes.
- */
-async function openRoom(deps: DrawingDeps, slug: string): Promise<{ doc: Y.Doc; url: string }> {
-  assertRoomSlug(slug);
-  const hub = await acquireHub(deps.access);
-  const rooms = await listHubRooms(hub.url);
-  if (!rooms.some((room) => room.slug === slug)) {
-    throw new Error(
-      `no board named "${slug}" is open. Call create_room with slug "${slug}" first.`,
-    );
-  }
-  const connection = await deps.connections.open(hub.url, slug);
-  return { doc: connection.doc, url: boardUrl(hub.url, slug) };
 }
 
 /** Adds elements to a room; answers with one id per element asked for. */
