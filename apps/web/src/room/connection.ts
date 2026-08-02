@@ -2,7 +2,7 @@ import type { RoomSlug } from "@co-canvas/protocol";
 import { ASSETS_KEY, ELEMENTS_KEY } from "@co-canvas/protocol";
 import { WebsocketProvider } from "y-websocket";
 import * as Y from "yjs";
-import { currentHubUrlSources, resolveSyncUrl } from "./hub-url";
+import { currentHubUrlSources, resolveSyncUrl } from "./hub-url.ts";
 
 /**
  * What the page can say about its link to the hub.

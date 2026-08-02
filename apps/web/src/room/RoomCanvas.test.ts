@@ -7,8 +7,8 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Awareness } from "y-protocols/awareness";
 import * as Y from "yjs";
-import type { RoomConnection } from "./connection";
-import { RoomCanvas } from "./RoomCanvas";
+import type { RoomConnection } from "./connection.ts";
+import { RoomCanvas } from "./RoomCanvas.tsx";
 
 /**
  * Excalidraw hands its imperative API over while it mounts and only then runs

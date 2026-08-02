@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
-import { expect, type RoomOpener, test } from "./fixtures";
-import { drawRect, expectConverged, expectCount, liveIds } from "./helpers";
+import { expect, type RoomOpener, test } from "./fixtures.ts";
+import { drawRect, expectConverged, expectCount, liveIds } from "./helpers.ts";
 
 /**
  * A drew one element, then received one from B, then drew a second of its own.

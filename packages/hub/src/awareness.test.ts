@@ -3,8 +3,8 @@ import { afterEach, describe, expect, it } from "vitest";
 import { Awareness, applyAwarenessUpdate } from "y-protocols/awareness";
 import { writeSyncStep1 } from "y-protocols/sync";
 import * as Y from "yjs";
-import type { Hub } from "./index";
-import { createHub } from "./index";
+import type { Hub } from "./index.ts";
+import { createHub } from "./index.ts";
 import {
   awarenessFrame,
   createClientPool,
@@ -14,7 +14,7 @@ import {
   stopHubs,
   syncFrame,
   waitFor,
-} from "./test-helpers";
+} from "./test-helpers.ts";
 
 describe("awareness", () => {
   const clients = createClientPool();

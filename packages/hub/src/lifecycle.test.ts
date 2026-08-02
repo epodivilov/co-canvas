@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { WebSocket } from "ws";
-import type { Hub } from "./index";
-import { createHub } from "./index";
+import type { Hub } from "./index.ts";
+import { createHub } from "./index.ts";
 import {
   activeTimers,
   createClientPool,
@@ -12,7 +12,7 @@ import {
   rawGet,
   stopHubs,
   waitFor,
-} from "./test-helpers";
+} from "./test-helpers.ts";
 
 describe("lifecycle", () => {
   const clients = createClientPool();

@@ -3,8 +3,8 @@ import { open, readdir, rename, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { RoomSlug } from "@co-canvas/protocol";
 import { isRoomSlug } from "@co-canvas/protocol";
-import { decodeHeader, LOG_HEADER_BYTES, LOG_VERSION } from "./log-format";
-import { LOG_SUFFIX, roomsDir } from "./room-log";
+import { decodeHeader, LOG_HEADER_BYTES, LOG_VERSION } from "./log-format.ts";
+import { LOG_SUFFIX, roomsDir } from "./room-log.ts";
 
 /** Name of the derived index sitting beside the `rooms/` directory. */
 export const INDEX_FILENAME = "rooms.json";

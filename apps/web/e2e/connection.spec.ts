@@ -1,4 +1,4 @@
-import { expect, test } from "./fixtures";
+import { expect, test } from "./fixtures.ts";
 import {
   CONVERGENCE_TIMEOUT,
   drawRect,
@@ -7,7 +7,7 @@ import {
   sleep,
   socketsOpened,
   waitForState,
-} from "./helpers";
+} from "./helpers.ts";
 
 test.describe("R7 — connection lifecycle", () => {
   test("losing the hub is shown on the page and leaves the board usable", async ({ hub, room }) => {

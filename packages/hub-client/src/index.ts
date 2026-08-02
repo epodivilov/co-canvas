@@ -5,10 +5,11 @@
  * A library with no CLI and no side effects on import: the MCP bridge and the
  * desktop shell both need this logic, and written twice it would drift.
  *
- * Relative imports inside this package carry their `.ts` extension because the
- * package ships as source and real processes — the fixtures, and later the MCP
- * bridge running under `node --experimental-strip-types` — load it through plain
- * Node, whose resolver does not guess extensions.
+ * Relative imports across the monorepo carry their real extension — the
+ * repo-wide convention Biome's `useImportExtensions` now enforces — because
+ * packages ship as source and real processes (the fixtures, and the MCP bridge
+ * running under `node --experimental-strip-types`) load them through plain Node,
+ * whose resolver does not guess extensions.
  */
 export { HubClientError, type HubClientErrorCode } from "./errors.ts";
 export {

@@ -1,8 +1,8 @@
 import { chmod, mkdir, rm, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import type { Hub } from "./index";
-import { createHub } from "./index";
+import type { Hub } from "./index.ts";
+import { createHub } from "./index.ts";
 import {
   createClientPool,
   createDataDirPool,
@@ -17,7 +17,7 @@ import {
   settle,
   stopHubs,
   waitFor,
-} from "./test-helpers";
+} from "./test-helpers.ts";
 
 const CREATED_AT = 1_700_000_000_000;
 

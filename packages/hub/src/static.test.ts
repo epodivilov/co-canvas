@@ -1,9 +1,9 @@
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
-import type { Hub } from "./index";
-import { createHub } from "./index";
-import { createDataDirPool, rawGet, stopHubs } from "./test-helpers";
+import type { Hub } from "./index.ts";
+import { createHub } from "./index.ts";
+import { createDataDirPool, rawGet, stopHubs } from "./test-helpers.ts";
 
 const fixtureDir = fileURLToPath(new URL("./__fixtures__/static", import.meta.url));
 

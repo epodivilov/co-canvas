@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import type { Hub } from "./index";
-import { createHub } from "./index";
+import type { Hub } from "./index.ts";
+import { createHub } from "./index.ts";
 import {
   createClientPool,
   createDataDirPool,
@@ -8,7 +8,7 @@ import {
   stopHubs,
   upgradeOutcome,
   waitFor,
-} from "./test-helpers";
+} from "./test-helpers.ts";
 
 describe("websocket routing", () => {
   const clients = createClientPool();

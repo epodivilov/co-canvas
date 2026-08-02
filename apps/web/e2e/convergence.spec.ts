@@ -1,4 +1,4 @@
-import { expect, test } from "./fixtures";
+import { expect, test } from "./fixtures.ts";
 import {
   dragFrom,
   drawRect,
@@ -10,7 +10,7 @@ import {
   recolourSelection,
   selectAt,
   sleep,
-} from "./helpers";
+} from "./helpers.ts";
 
 test.describe("R3 — convergence", () => {
   test("simultaneous drawing loses nothing", async ({ room }) => {

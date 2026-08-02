@@ -1,7 +1,7 @@
 import type { Page } from "@playwright/test";
-import { type BridgeClient, startBridge, textOf } from "./bridge-client";
-import { expect, test } from "./fixtures";
-import { drawFreehand, drawRect, liveElements, liveIds, selectAt, writeNote } from "./helpers";
+import { type BridgeClient, startBridge, textOf } from "./bridge-client.ts";
+import { expect, test } from "./fixtures.ts";
+import { drawFreehand, drawRect, liveElements, liveIds, selectAt, writeNote } from "./helpers.ts";
 
 /**
  * `describe_scene` against a board a person is editing with a real mouse.

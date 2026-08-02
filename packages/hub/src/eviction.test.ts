@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
-import type { Hub, HubOptions } from "./index";
-import { createHub, DEFAULT_IDLE_PERIOD_MS } from "./index";
+import type { Hub, HubOptions } from "./index.ts";
+import { createHub, DEFAULT_IDLE_PERIOD_MS } from "./index.ts";
 import {
   createClientPool,
   createDataDirPool,
@@ -10,7 +10,7 @@ import {
   settle,
   stopHubs,
   waitFor,
-} from "./test-helpers";
+} from "./test-helpers.ts";
 
 describe("idle eviction", () => {
   const clients = createClientPool();

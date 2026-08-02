@@ -1,5 +1,5 @@
-import { expect, test } from "./fixtures";
-import { CONVERGENCE_TIMEOUT, drawRect, expectCount, liveIds, selectAt } from "./helpers";
+import { expect, test } from "./fixtures.ts";
+import { CONVERGENCE_TIMEOUT, drawRect, expectCount, liveIds, selectAt } from "./helpers.ts";
 
 test.describe("R1 — joining a room", () => {
   test("a fresh room renders a canvas and reports a connection", async ({ room }) => {

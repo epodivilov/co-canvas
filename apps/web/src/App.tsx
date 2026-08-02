@@ -1,6 +1,6 @@
 import { PROTOCOL_VERSION } from "@co-canvas/protocol";
-import { RoomView } from "./room/RoomView";
-import { parseRoute } from "./routes";
+import { RoomView } from "./room/RoomView.tsx";
+import { parseRoute } from "./routes.ts";
 
 /**
  * Dispatches on the pathname the page was served under. There is no client-side

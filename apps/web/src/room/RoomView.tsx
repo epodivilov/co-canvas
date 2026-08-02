@@ -1,10 +1,10 @@
 import type { RoomSlug } from "@co-canvas/protocol";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ConnectionIndicator } from "./ConnectionIndicator";
-import { type ConnectionStatus, createRoomConnection, type RoomConnection } from "./connection";
-import { installInspectionHandle } from "./inspect";
-import { RoomCanvas } from "./RoomCanvas";
+import { ConnectionIndicator } from "./ConnectionIndicator.tsx";
+import { type ConnectionStatus, createRoomConnection, type RoomConnection } from "./connection.ts";
+import { installInspectionHandle } from "./inspect.ts";
+import { RoomCanvas } from "./RoomCanvas.tsx";
 
 /**
  * One board, live.

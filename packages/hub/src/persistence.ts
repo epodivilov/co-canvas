@@ -2,9 +2,9 @@ import { constants } from "node:fs";
 import { access, mkdir } from "node:fs/promises";
 import type { RoomSlug } from "@co-canvas/protocol";
 import * as Y from "yjs";
-import type { RoomIndexEntry } from "./room-index";
-import { rebuildRoomIndex, writeRoomIndex } from "./room-index";
-import { appendToLog, loadRoomLog, publishLog, roomsDir } from "./room-log";
+import type { RoomIndexEntry } from "./room-index.ts";
+import { rebuildRoomIndex, writeRoomIndex } from "./room-index.ts";
+import { appendToLog, loadRoomLog, publishLog, roomsDir } from "./room-log.ts";
 
 /**
  * Quiet period after the last edit before a room's buffer reaches disk.

@@ -1,6 +1,6 @@
-import { writeElementAsAgent } from "./agent-writer";
-import { expect, test } from "./fixtures";
-import { drawRect, expectConverged, expectCount, liveIds } from "./helpers";
+import { writeElementAsAgent } from "./agent-writer.ts";
+import { expect, test } from "./fixtures.ts";
+import { drawRect, expectConverged, expectCount, liveIds } from "./helpers.ts";
 
 test.describe("R6 — a client that is not a browser", () => {
   test("an element written from node shows up without a reload", async ({ hub, room }) => {

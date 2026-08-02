@@ -3,10 +3,10 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { WebSocket } from "ws";
 import * as Y from "yjs";
-import type { Hub } from "./index";
-import { createHub } from "./index";
-import { LOG_VERSION } from "./log-format";
-import { loadRoomLog } from "./room-log";
+import type { Hub } from "./index.ts";
+import { createHub } from "./index.ts";
+import { LOG_VERSION } from "./log-format.ts";
+import { loadRoomLog } from "./room-log.ts";
 import {
   createClientPool,
   createDataDirPool,
@@ -19,7 +19,7 @@ import {
   roomDocBytes,
   stopHubs,
   waitFor,
-} from "./test-helpers";
+} from "./test-helpers.ts";
 
 const CREATED_AT = 1_700_000_000_000;
 

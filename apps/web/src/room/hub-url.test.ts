@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEV_HUB_URL, type HubUrlSources, resolveHubBaseUrl, resolveSyncUrl } from "./hub-url";
+import { DEV_HUB_URL, type HubUrlSources, resolveHubBaseUrl, resolveSyncUrl } from "./hub-url.ts";
 
 const sources = (overrides: Partial<HubUrlSources> = {}): HubUrlSources => ({
   search: "",

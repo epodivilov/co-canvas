@@ -2,8 +2,8 @@ import { writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import type { Hub } from "./index";
-import { createHub } from "./index";
+import type { Hub } from "./index.ts";
+import { createHub } from "./index.ts";
 import {
   createClientPool,
   createDataDirPool,
@@ -13,7 +13,7 @@ import {
   roomDocBytes,
   stopHubs,
   waitFor,
-} from "./test-helpers";
+} from "./test-helpers.ts";
 
 /**
  * `packages/hub-client` resolves the "who runs the hub" race by starting a hub

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ExcalidrawBinding, yjsToExcalidraw } from "y-excalidraw";
 import * as Y from "yjs";
 import "@excalidraw/excalidraw/index.css";
-import type { RoomConnection } from "./connection";
+import type { RoomConnection } from "./connection.ts";
 
 interface RoomCanvasProps {
   connection: RoomConnection;

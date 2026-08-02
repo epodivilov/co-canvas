@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseRoute } from "./routes";
+import { parseRoute } from "./routes.ts";
 
 describe("parseRoute", () => {
   it("routes /room/{slug} to the room canvas", () => {

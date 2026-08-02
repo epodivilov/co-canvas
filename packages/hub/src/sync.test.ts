@@ -7,8 +7,8 @@ import {
   writeUpdate,
 } from "y-protocols/sync";
 import * as Y from "yjs";
-import type { Hub } from "./index";
-import { createHub } from "./index";
+import type { Hub } from "./index.ts";
+import { createHub } from "./index.ts";
 import {
   createClientPool,
   createDataDirPool,
@@ -17,7 +17,7 @@ import {
   stopHubs,
   syncFrame,
   waitFor,
-} from "./test-helpers";
+} from "./test-helpers.ts";
 
 describe("document sync", () => {
   const clients = createClientPool();

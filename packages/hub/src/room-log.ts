@@ -9,7 +9,7 @@ import {
   LOG_HEADER_BYTES,
   LOG_VERSION,
   parseFrames,
-} from "./log-format";
+} from "./log-format.ts";
 
 /**
  * A log this build will not touch because a newer one wrote it.
