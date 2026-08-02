@@ -11,7 +11,8 @@
     "node": ">=22"
   },
   "scripts": {
-    "build": "pnpm -r build",
+    "build": "pnpm --filter @co-canvas/web build && pnpm --filter @co-canvas/mcp-bridge build && pnpm --filter @co-canvas/hub-cli build",
+    "build:binary": "pnpm --filter @co-canvas/web build && pnpm --filter @co-canvas/hub-cli build:binary",
     "typecheck": "pnpm -r typecheck",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",

@@ -1,0 +1,5 @@
+# Standalone `bun --compile` binaries.
+binaries/
+# Generated at binary-build time from the frontend; see scripts/build-binary.mjs.
+bun/web/
+bun/embedded-assets.ts

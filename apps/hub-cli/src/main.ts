@@ -1,22 +1,18 @@
 #!/usr/bin/env node
-import { createHub } from "@co-canvas/hub";
+import { existsSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { runHubCli, type StaticDefault } from "./cli.ts";
 
-// Argument parsing and idle shutdown land in CC-3; for now this is the thinnest
-// possible process wrapper around the library.
-const hub = createHub();
-const url = await hub.start();
+// The Node build output ships the frontend as a directory beside `main.js`:
+// `tsdown` emits `dist/main.js`, and the build copies the `apps/web` build into
+// `dist/web`. Running from source instead (`node --experimental-strip-types
+// src/main.ts`) has no such sibling, so the hub serves no frontend and the Vite
+// dev server does — which is the intended split during development.
+const here = dirname(fileURLToPath(import.meta.url));
+const bundledWeb = join(here, "web");
+const defaultStatic: StaticDefault = existsSync(join(bundledWeb, "index.html"))
+  ? { dir: bundledWeb }
+  : {};
 
-process.stderr.write(`co-canvas hub listening on ${url} (data: ${hub.dataDir})\n`);
-
-for (const signal of ["SIGINT", "SIGTERM"] as const) {
-  process.once(signal, () => {
-    // `stop()` now writes every room out before it resolves, and Node keeps the
-    // process alive while those writes are outstanding. What it cannot survive
-    // is the rejection going unhandled: that would abort the process mid-flush
-    // and cost exactly the work the graceful stop exists to save.
-    hub.stop().catch((error: unknown) => {
-      process.exitCode = 1;
-      process.stderr.write(`co-canvas hub failed to stop cleanly: ${String(error)}\n`);
-    });
-  });
-}
+await runHubCli({ argv: process.argv.slice(2), env: process.env, defaultStatic });

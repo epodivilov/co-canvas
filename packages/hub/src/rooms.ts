@@ -15,6 +15,12 @@ export interface RoomRegistryOptions {
   persistence: Persistence;
   /** How long a room with no peers is kept in memory before it is released. */
   idlePeriodMs: number;
+  /**
+   * Called with the total number of connected peers across every room whenever
+   * a peer joins or leaves. The CLI's idle shutdown watches this: it is the one
+   * signal that says whether an open browser tab is keeping the hub in use.
+   */
+  onPeersChanged?: (totalPeers: number) => void;
 }
 
 export interface RoomRegistry {
@@ -28,6 +34,8 @@ export interface RoomRegistry {
   obtain(slug: RoomSlug): Promise<Room>;
   /** Snapshot of every room in memory, cheap enough to call per request. */
   summarise(): RoomSummary[];
+  /** Peers currently connected across every open room. */
+  totalPeers(): number;
   /** Flushes every room to disk and then tears them all down. */
   shutdown(): Promise<void>;
 }
@@ -57,8 +65,16 @@ type Slot =
  * a drawing session, which is exactly when a user closes the tab.
  */
 export function createRoomRegistry(options: RoomRegistryOptions): RoomRegistry {
-  const { persistence, idlePeriodMs } = options;
+  const { persistence, idlePeriodMs, onPeersChanged } = options;
   const slots = new Map<RoomSlug, Slot>();
+
+  function totalPeers(): number {
+    let total = 0;
+    for (const slot of slots.values()) {
+      if (slot.phase === "open") total += slot.room.connections.size;
+    }
+    return total;
+  }
 
   function armIdle(slug: RoomSlug, slot: Extract<Slot, { phase: "open" }>): void {
     if (slot.idle !== null) clearTimeout(slot.idle);
@@ -82,6 +98,7 @@ export function createRoomRegistry(options: RoomRegistryOptions): RoomRegistry {
     if (slot?.phase !== "open" || slot.room !== room) return;
     if (room.connections.size > 0) disarmIdle(slot);
     else armIdle(room.slug, slot);
+    onPeersChanged?.(totalPeers());
   }
 
   /** Flushes a room out and then takes its timers and listeners down. */
@@ -153,6 +170,8 @@ export function createRoomRegistry(options: RoomRegistryOptions): RoomRegistry {
       slots.set(slug, { phase: "opening", ready });
       return await ready;
     },
+
+    totalPeers,
 
     summarise(): RoomSummary[] {
       const summaries: RoomSummary[] = [];

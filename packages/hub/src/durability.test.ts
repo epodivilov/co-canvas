@@ -2,6 +2,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import * as decoding from "lib0/decoding";
 import { afterEach, describe, expect, it } from "vitest";
+import { writeSyncStep1 } from "y-protocols/sync";
 import * as Y from "yjs";
 import type { Hub } from "./index.ts";
 import { createHub } from "./index.ts";
@@ -19,9 +20,18 @@ import {
   roomDocBytes,
   settle,
   stopHubs,
+  syncFrame,
   upgradeOutcome,
   waitFor,
 } from "./test-helpers.ts";
+
+/** Whether a frame is the hub's sync step 2 — the reply it owes a client's step 1. */
+function isSyncStep2(frame: Uint8Array): boolean {
+  const decoder = decoding.createDecoder(frame);
+  if (decoding.readVarUint(decoder) !== MESSAGE_SYNC) return false;
+  // `y-protocols/sync` numbers the messages: 0 is step 1, 1 is step 2.
+  return decoding.readVarUint(decoder) === 1;
+}
 
 /** Reads the state vector out of the sync step 1 the hub opens a connection with. */
 function openingStateVector(frame: Uint8Array): Map<number, number> {
@@ -175,6 +185,46 @@ describe("durability", () => {
     const stateVector = openingStateVector(peer.frames[0] as Uint8Array);
     expect(stateVector.size).toBeGreaterThan(0);
     peer.close();
+  });
+
+  it("processes a client's opening state vector even before the room is ready (R7)", async () => {
+    const dataDir = await dataDirs.create();
+    await mkdir(join(dataDir, "rooms"), { recursive: true });
+    const updates = recordUpdates([(doc) => doc.getMap("board").set("shape", "rect")]);
+    await writeFile(logPath(dataDir, "alpha"), encodeLog(1_700_000_000_000, updates));
+
+    const running = hub({ dataDir });
+    const url = await running.start();
+    const peer = await openRawClient(url, "/sync/alpha");
+    // Announce our (empty) state vector immediately, the way a real client does
+    // on open — while the room is still being read off disk. The message must be
+    // held and replayed, not dropped: the hub owes us a sync step 2 carrying the
+    // board. Under Node the receiver used to be paused for this; the replacement
+    // buffers instead and must keep the guarantee.
+    const probe = new Y.Doc();
+    peer.send(syncFrame((encoder) => writeSyncStep1(encoder, probe)));
+    probe.destroy();
+
+    await waitFor(() => peer.frames.some(isSyncStep2));
+    expect(peer.frames.some(isSyncStep2)).toBe(true);
+    peer.close();
+  });
+
+  it("cleans up a peer that leaves while its room is loading and still stops (R7)", async () => {
+    const dataDir = await dataDirs.create();
+    await mkdir(join(dataDir, "rooms"), { recursive: true });
+    const updates = recordUpdates([(doc) => doc.getMap("board").set("shape", "rect")]);
+    await writeFile(logPath(dataDir, "alpha"), encodeLog(1_700_000_000_000, updates));
+
+    const running = hub({ dataDir });
+    const url = await running.start();
+    const peer = await openRawClient(url, "/sync/alpha");
+    // Gone before the load could settle. With no paused receiver to strand its
+    // closing handshake, `stop()` must still resolve rather than wait forever.
+    peer.close();
+
+    await running.stop();
+    expect(running.url).toBeNull();
   });
 
   it("never shows a connecting client an empty board that fills in later (R2)", async () => {

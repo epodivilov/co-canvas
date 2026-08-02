@@ -32,6 +32,12 @@ importers:
       '@co-canvas/hub':
         specifier: workspace:*
         version: link:../../packages/hub
+      '@co-canvas/hub-client':
+        specifier: workspace:*
+        version: link:../../packages/hub-client
+      '@co-canvas/protocol':
+        specifier: workspace:*
+        version: link:../../packages/protocol
     devDependencies:
       '@types/node':
         specifier: ^26.1.2
@@ -39,6 +45,12 @@ importers:
       tsdown:
         specifier: ^0.22.14
         version: 0.22.14(typescript@7.0.2)
+      y-websocket:
+        specifier: ^3.0.0
+        version: 3.0.0(yjs@13.6.31)
+      yjs:
+        specifier: ^13.6.31
+        version: 13.6.31
 
   apps/mcp-bridge:
     dependencies:

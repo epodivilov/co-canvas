@@ -1,4 +1,5 @@
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
+import { join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import type { Hub } from "./index.ts";
@@ -6,6 +7,18 @@ import { createHub } from "./index.ts";
 import { createDataDirPool, rawGet, stopHubs } from "./test-helpers.ts";
 
 const fixtureDir = fileURLToPath(new URL("./__fixtures__/static", import.meta.url));
+
+/** Reads a directory into the in-memory shape the compiled binary embeds it as. */
+async function embeddedFrom(directory: string): Promise<Map<string, Uint8Array>> {
+  const assets = new Map<string, Uint8Array>();
+  for (const entry of await readdir(directory, { recursive: true, withFileTypes: true })) {
+    if (!entry.isFile()) continue;
+    const absolute = join(entry.parentPath, entry.name);
+    const key = relative(directory, absolute).split(sep).join("/");
+    assets.set(key, await readFile(absolute));
+  }
+  return assets;
+}
 
 describe("static serving", () => {
   const dataDirs = createDataDirPool();
@@ -112,5 +125,76 @@ describe("static serving", () => {
       const response = await rawGet(url, path);
       expect(response.status, `expected 404 for ${path}`).toBe(404);
     }
+  });
+});
+
+/**
+ * The single-file `bun --compile` binary has no directory to read from, so it
+ * carries the frontend as an in-memory map. It must serve it exactly as a
+ * directory does — same content types, same SPA fallback, same refusals, same
+ * endpoints left reachable — or the binary and the Node build would diverge.
+ */
+describe("static serving from embedded assets", () => {
+  const dataDirs = createDataDirPool();
+  let hub: Hub | null = null;
+
+  afterEach(async () => {
+    try {
+      await stopHubs(hub === null ? [] : [hub]);
+    } finally {
+      hub = null;
+      await dataDirs.removeAll();
+    }
+  });
+
+  async function startEmbedded(): Promise<string> {
+    const dataDir = await dataDirs.create();
+    hub = createHub({ port: 0, dataDir, staticAssets: await embeddedFrom(fixtureDir) });
+    return await hub.start();
+  }
+
+  it("serves an embedded asset with its bytes and content type (R6)", async () => {
+    const url = await startEmbedded();
+
+    const response = await rawGet(url, "/assets/app.js");
+
+    expect(response.status).toBe(200);
+    expect(response.headers["content-type"]).toMatch(/javascript/);
+    expect(response.body).toEqual(await readFile(`${fixtureDir}/assets/app.js`));
+  });
+
+  it("falls back to index.html for an extension-less path (R6)", async () => {
+    const url = await startEmbedded();
+
+    const response = await rawGet(url, "/room/demo");
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual(await readFile(`${fixtureDir}/index.html`));
+  });
+
+  it("404s a missing embedded asset instead of masking it with index.html (R6)", async () => {
+    const url = await startEmbedded();
+
+    const response = await rawGet(url, "/assets/missing.js");
+
+    expect(response.status).toBe(404);
+    expect(response.body.toString("utf8")).not.toContain("co-canvas static fixture index");
+  });
+
+  it("refuses a traversal even against an embedded source (R6)", async () => {
+    const url = await startEmbedded();
+
+    const response = await rawGet(url, "/assets/%2e%2e/%2e%2e/etc/passwd");
+
+    expect(response.status).toBe(404);
+    expect(response.body.toString("utf8")).not.toContain("root:");
+  });
+
+  it("keeps its own endpoints reachable behind embedded assets (R6)", async () => {
+    const url = await startEmbedded();
+
+    const health = await rawGet(url, "/health");
+    expect(health.headers["content-type"]).toMatch(/application\/json/);
+    expect(JSON.parse(health.body.toString("utf8"))).toMatchObject({ service: "co-canvas-hub" });
   });
 });

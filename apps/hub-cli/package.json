@@ -11,15 +11,20 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsdown",
+    "build": "tsdown && node scripts/copy-web.mjs",
+    "build:binary": "node scripts/build-binary.mjs",
     "dev": "node --experimental-strip-types src/main.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@co-canvas/hub": "workspace:*"
+    "@co-canvas/hub": "workspace:*",
+    "@co-canvas/hub-client": "workspace:*",
+    "@co-canvas/protocol": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^26.1.2",
-    "tsdown": "^0.22.14"
+    "tsdown": "^0.22.14",
+    "y-websocket": "^3.0.0",
+    "yjs": "^13.6.31"
   }
 }
