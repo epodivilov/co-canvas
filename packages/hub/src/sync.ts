@@ -105,8 +105,18 @@ export function createRoom(
 
 /**
  * Puts a freshly upgraded socket into a room and starts the sync handshake.
+ *
+ * `backlog` carries the frames that arrived before the room finished loading:
+ * a client announces its state vector the moment it opens, and the room takes a
+ * turn of the event loop to read off disk. The upgrade path buffers those
+ * frames and hands them here, so the peer's first message — the one that makes
+ * it converge — is replayed rather than dropped.
  */
-export function attachConnection(room: Room, socket: WebSocket): void {
+export function attachConnection(
+  room: Room,
+  socket: WebSocket,
+  backlog: readonly Uint8Array[] = [],
+): void {
   const connection: Connection = { socket, controlledIds: new Set() };
   room.connections.add(connection);
   room.onPeersChanged?.(room);
@@ -142,6 +152,18 @@ export function attachConnection(room: Room, socket: WebSocket): void {
       encodeAwarenessUpdate(room.awareness, [...states.keys()]),
     );
     send(connection, encoding.toUint8Array(awarenessEncoder));
+  }
+
+  // Drained on a microtask rather than inline, matching the tick the paused
+  // receiver used to deliver these on. It keeps the order — the microtask runs
+  // before any live frame, which can only arrive on a later I/O turn — while
+  // letting other sockets racing into the same still-loading room attach first,
+  // so a buffered update still fans out to a peer that joined a moment later
+  // instead of being processed before it was listening.
+  if (backlog.length > 0) {
+    queueMicrotask(() => {
+      for (const frame of backlog) handleMessage(room, connection, frame);
+    });
   }
 }
 
@@ -194,7 +216,8 @@ function send(connection: Connection, message: Uint8Array): void {
   }
 }
 
-function toBytes(data: Buffer | ArrayBuffer | Buffer[]): Uint8Array {
+/** Normalises whatever `ws` (or Bun's shim) hands a `message` listener into plain bytes. */
+export function toBytes(data: Buffer | ArrayBuffer | Buffer[]): Uint8Array {
   if (Array.isArray(data)) return new Uint8Array(Buffer.concat(data));
   if (Buffer.isBuffer(data)) return new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
   return new Uint8Array(data);

@@ -29,26 +29,63 @@ const CONTENT_TYPES = new Map<string, string>([
 ]);
 
 /**
- * Serves a prebuilt single-page frontend out of `directory`.
+ * Where a static handler reads its bytes from.
  *
- * Nothing outside `directory` is reachable, and the SPA fallback is limited to
+ * The path handed in is a relative POSIX path with no leading slash, already
+ * stripped of `.` and `..` by the handler: a source only has to map it to bytes
+ * or report that it holds nothing there. Two sources exist because the frontend
+ * reaches the hub two ways — a directory on disk for the Node build output, and
+ * an in-memory map for the single-file `bun --compile` binary, which has no
+ * directory to read from.
+ */
+export interface AssetSource {
+  read(path: string): Promise<Uint8Array | null>;
+}
+
+/** Reads assets from a directory on disk, refusing anything outside it. */
+export function createDirectoryAssetSource(directory: string): AssetSource {
+  const root = resolve(directory);
+  return {
+    async read(path) {
+      const file = join(root, ...path.split("/"));
+      // Belt-and-suspenders: the handler already rejects `..` before this, but
+      // a source that reads the filesystem checks containment itself.
+      if (!isInside(root, file)) return null;
+      return await readIfFile(file);
+    },
+  };
+}
+
+/**
+ * Reads assets from a map held in memory — the shape the compiled binary
+ * carries its frontend in, keyed by the same relative POSIX path a directory
+ * source is asked for.
+ */
+export function createEmbeddedAssetSource(assets: ReadonlyMap<string, Uint8Array>): AssetSource {
+  return {
+    async read(path) {
+      return assets.get(path) ?? null;
+    },
+  };
+}
+
+/**
+ * Serves a prebuilt single-page frontend out of `source`.
+ *
+ * Nothing outside the source is reachable, and the SPA fallback is limited to
  * extension-less paths so a broken asset URL stays a 404 instead of silently
  * turning into HTML that fails later as a parse error.
  */
-export function createStaticHandler(directory: string): StaticHandler {
-  const root = resolve(directory);
-
+export function createStaticHandler(source: AssetSource): StaticHandler {
   return async (pathname, response) => {
     const segments = safeSegments(pathname);
     if (segments === null) return false;
 
     if (segments.length > 0) {
-      const file = join(root, ...segments);
-      if (!isInside(root, file)) return false;
-
-      const body = await readIfFile(file);
+      const relative = segments.join("/");
+      const body = await source.read(relative);
       if (body !== null) {
-        respondWithFile(response, contentTypeOf(file), body);
+        respondWithFile(response, contentTypeOf(relative), body);
         return true;
       }
 
@@ -56,7 +93,7 @@ export function createStaticHandler(directory: string): StaticHandler {
       if (last !== undefined && extname(last) !== "") return false;
     }
 
-    const index = await readIfFile(join(root, "index.html"));
+    const index = await source.read("index.html");
     if (index === null) return false;
     respondWithFile(response, "text/html; charset=utf-8", index);
     return true;
@@ -89,7 +126,7 @@ function isInside(root: string, candidate: string): boolean {
   return path !== "" && !path.startsWith("..") && !isAbsolute(path);
 }
 
-async function readIfFile(file: string): Promise<Buffer | null> {
+async function readIfFile(file: string): Promise<Uint8Array | null> {
   try {
     return await readFile(file);
   } catch {
@@ -98,7 +135,7 @@ async function readIfFile(file: string): Promise<Buffer | null> {
   }
 }
 
-function respondWithFile(response: ServerResponse, contentType: string, body: Buffer): void {
+function respondWithFile(response: ServerResponse, contentType: string, body: Uint8Array): void {
   response.writeHead(200, { "content-type": contentType, "content-length": body.byteLength });
   response.end(body);
 }

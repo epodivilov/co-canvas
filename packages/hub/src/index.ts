@@ -16,8 +16,13 @@ import { WebSocket, WebSocketServer } from "ws";
 import { createPersistence } from "./persistence.ts";
 import { UnsupportedLogVersionError } from "./room-log.ts";
 import { createRoomRegistry } from "./rooms.ts";
-import { createStaticHandler } from "./static-files.ts";
-import { attachConnection } from "./sync.ts";
+import type { StaticHandler } from "./static-files.ts";
+import {
+  createDirectoryAssetSource,
+  createEmbeddedAssetSource,
+  createStaticHandler,
+} from "./static-files.ts";
+import { attachConnection, toBytes } from "./sync.ts";
 
 /** WebSocket paths under this prefix address a room. Nothing else upgrades. */
 const SYNC_PREFIX = "/sync/";
@@ -27,6 +32,17 @@ const CLOSE_POLICY_VIOLATION = 1008;
 const CLOSE_GOING_AWAY = 1001;
 /** RFC 6455 internal error: the slug was fine, the room could not be opened. */
 const CLOSE_INTERNAL_ERROR = 1011;
+
+/**
+ * How long a going-away close has to complete before the socket is terminated.
+ *
+ * Node finishes `server.close()` once each peer answers the closing handshake,
+ * which is immediate for a well-behaved client, so this grace is not spent.
+ * Bun's `node:http` never tears an upgraded socket down on a graceful close, and
+ * a genuinely unresponsive peer would strand `server.close()` on Node too — so
+ * after the grace the sockets are terminated and the port comes back regardless.
+ */
+const RELEASE_GRACE_MS = 250;
 
 /**
  * How long a room with no peers is kept in memory before it is flushed,
@@ -44,9 +60,17 @@ export interface HubOptions {
   dataDir?: string;
   /**
    * Directory of prebuilt frontend assets to serve alongside the API.
-   * Without it the hub answers 404 on everything but its own endpoints.
+   * Without it — and without {@link staticAssets} — the hub answers 404 on
+   * everything but its own endpoints.
    */
   staticDir?: string;
+  /**
+   * Prebuilt frontend assets held in memory, keyed by their relative POSIX path
+   * (`index.html`, `assets/app.js`). The shape the single-file `bun --compile`
+   * binary carries its frontend in, since it has no directory to read from.
+   * Ignored when {@link staticDir} is also given.
+   */
+  staticAssets?: ReadonlyMap<string, Uint8Array>;
   /** Overrides {@link DEFAULT_IDLE_PERIOD_MS}. */
   idlePeriodMs?: number;
 }
@@ -77,6 +101,18 @@ export interface Hub {
   readonly dataDir: string;
   /** Idle period after which a room with no peers is released. */
   readonly idlePeriodMs: number;
+  /** Peers currently connected across every room. */
+  totalPeers(): number;
+  /**
+   * Subscribes to the total peer count, called on every join and leave; returns
+   * a function that unsubscribes.
+   *
+   * This is the signal the CLI's idle shutdown runs on: a hub with no peers for
+   * long enough is a process nobody is using, and an open browser tab is a peer
+   * that keeps it. Exposed as a push rather than a poll so the timer can be
+   * armed and disarmed exactly on the transitions, not on a clock of its own.
+   */
+  onPeersChanged(listener: (totalPeers: number) => void): () => void;
 }
 
 function defaultDataDir(): string {
@@ -96,11 +132,21 @@ export function createHub(options: HubOptions = {}): Hub {
   const port = options.port ?? DEFAULT_PORT;
   const dataDir = options.dataDir ?? defaultDataDir();
   const idlePeriodMs = options.idlePeriodMs ?? DEFAULT_IDLE_PERIOD_MS;
-  const serveStatic =
-    options.staticDir === undefined ? null : createStaticHandler(options.staticDir);
+  const serveStatic = resolveStaticHandler(options);
 
+  // Subscribers to the total peer count. A `Set` of listeners rather than a
+  // single callback so that observing peers is a capability of the hub, not a
+  // slot one owner claims — the CLI wires idle shutdown to it without stopping
+  // anything else from watching.
+  const peerListeners = new Set<(totalPeers: number) => void>();
   const persistence = createPersistence(dataDir);
-  const rooms = createRoomRegistry({ persistence, idlePeriodMs });
+  const rooms = createRoomRegistry({
+    persistence,
+    idlePeriodMs,
+    onPeersChanged: (totalPeers) => {
+      for (const listener of peerListeners) listener(totalPeers);
+    },
+  });
   const sockets = new WebSocketServer({ noServer: true });
 
   const server = createServer((request, response) => {
@@ -159,21 +205,38 @@ export function createHub(options: HubOptions = {}): Hub {
       }
 
       // Reading the room off disk takes a turn of the event loop, and a client
-      // opens by announcing its own state vector. Nothing listens for that
-      // message yet, so the socket is held back until the room is ready rather
-      // than allowed to drop the one message that makes the peer converge.
-      webSocket.pause();
+      // opens by announcing its own state vector. Under Node's `ws` the receiver
+      // could be paused until the room was ready; Bun's native WebSocket has no
+      // receiver to pause (`webSocket.pause` is not a function), so instead the
+      // frames that arrive during the load are buffered and replayed once the
+      // connection is attached. Either way the peer's first message — the one
+      // that makes it converge — is never dropped, and the socket's receiver is
+      // never held, so a peer that closed mid-load still finishes its handshake
+      // and `server.close()` does not wait on it forever.
+      const backlog: Uint8Array[] = [];
+      let closed = false;
+      const onEarlyMessage = (data: Buffer | ArrayBuffer | Buffer[]): void => {
+        backlog.push(toBytes(data));
+      };
+      const onEarlyClose = (): void => {
+        closed = true;
+      };
+      webSocket.on("message", onEarlyMessage);
+      webSocket.once("close", onEarlyClose);
+
       rooms.obtain(slug).then(
         (room) => {
-          if (webSocket.readyState === WebSocket.OPEN) attachConnection(room, webSocket);
-          // Resumed either way. A peer that went away while the room was being
-          // read still has a closing handshake to finish, and a paused receiver
-          // never reads the reply that completes it — which would leave
-          // `server.close()` waiting on a socket that is never going to end.
-          webSocket.resume();
+          webSocket.off("message", onEarlyMessage);
+          webSocket.off("close", onEarlyClose);
+          // A peer that went away while the room was being read has nothing to
+          // attach to; its socket is already on its way out and is left to
+          // finish its closing handshake.
+          if (closed || webSocket.readyState !== WebSocket.OPEN) return;
+          attachConnection(room, webSocket, backlog);
         },
         (error: unknown) => {
-          webSocket.resume();
+          webSocket.off("message", onEarlyMessage);
+          webSocket.off("close", onEarlyClose);
           webSocket.close(CLOSE_INTERNAL_ERROR, roomFailureReason(error));
         },
       );
@@ -190,7 +253,31 @@ export function createHub(options: HubOptions = {}): Hub {
     for (const webSocket of sockets.clients) webSocket.close(CLOSE_GOING_AWAY, "hub stopping");
 
     await new Promise<void>((resolve, reject) => {
-      server.close((error) => (error ? reject(error) : resolve()));
+      let settled = false;
+      let forceClose: NodeJS.Timeout | undefined;
+      const finish = (error?: Error): void => {
+        if (settled) return;
+        settled = true;
+        if (forceClose !== undefined) clearTimeout(forceClose);
+        if (error) reject(error);
+        else resolve();
+      };
+
+      // Node calls this once every going-away handshake has finished — normally
+      // at once for a well-behaved peer. Bun's node:http never calls it for an
+      // upgraded socket at all.
+      server.close((error) => finish(error ?? undefined));
+
+      // When the grace is up the graceful close did not land: a peer that will
+      // not answer on Node, or an upgraded socket Bun will not report closed.
+      // Dropping every remaining connection frees the port on both runtimes —
+      // `server.close()` has already stopped the server listening — so stop()
+      // resolves rather than waiting forever. On the normal Node path this timer
+      // is cleared before it fires and the close stays fully graceful.
+      forceClose = setTimeout(() => {
+        server.closeAllConnections?.();
+        finish();
+      }, RELEASE_GRACE_MS);
     });
   }
 
@@ -253,7 +340,27 @@ export function createHub(options: HubOptions = {}): Hub {
     },
     dataDir,
     idlePeriodMs,
+    totalPeers: () => rooms.totalPeers(),
+    onPeersChanged(listener) {
+      peerListeners.add(listener);
+      return () => peerListeners.delete(listener);
+    },
   };
+}
+
+/**
+ * Turns the static options into a handler, or `null` when the hub serves no
+ * frontend. A directory wins over an embedded map: a `--static` override is a
+ * developer deliberately pointing the hub at a build on disk.
+ */
+function resolveStaticHandler(options: HubOptions): StaticHandler | null {
+  if (options.staticDir !== undefined) {
+    return createStaticHandler(createDirectoryAssetSource(options.staticDir));
+  }
+  if (options.staticAssets !== undefined) {
+    return createStaticHandler(createEmbeddedAssetSource(options.staticAssets));
+  }
+  return null;
 }
 
 /**
