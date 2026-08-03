@@ -3,8 +3,8 @@ import { join } from "node:path";
 import * as decoding from "lib0/decoding";
 import { afterEach, describe, expect, it } from "vitest";
 import * as Y from "yjs";
-import type { Hub } from "./index";
-import { createHub } from "./index";
+import type { Hub } from "./index.ts";
+import { createHub } from "./index.ts";
 import {
   createClientPool,
   createDataDirPool,
@@ -21,7 +21,7 @@ import {
   stopHubs,
   upgradeOutcome,
   waitFor,
-} from "./test-helpers";
+} from "./test-helpers.ts";
 
 /** Reads the state vector out of the sync step 1 the hub opens a connection with. */
 function openingStateVector(frame: Uint8Array): Map<number, number> {

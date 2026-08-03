@@ -15,25 +15,6 @@
  *   CO_CANVAS_DATA_DIR  data directory, written by `findOrStartHub`
  */
 import { appendFileSync } from "node:fs";
-import { registerHooks } from "node:module";
-
-// `@co-canvas/hub` ships TypeScript source whose relative imports carry no
-// extension — fine for tsc and for vite, but Node's resolver does not guess.
-// Retrying a failed relative resolution with `.ts` is the smallest thing that
-// lets a plain `node` process load the real hub instead of a hand-written
-// imitation that could agree with a broken bridge.
-registerHooks({
-  resolve(specifier, context, nextResolve) {
-    try {
-      return nextResolve(specifier, context);
-    } catch (error) {
-      if (specifier.startsWith(".") && !specifier.endsWith(".ts")) {
-        return nextResolve(`${specifier}.ts`, context);
-      }
-      throw error;
-    }
-  },
-});
 
 const { createHub } = await import("@co-canvas/hub");
 

@@ -1,5 +1,5 @@
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
-import type { ConnectionStatus, RoomConnection } from "./connection";
+import type { ConnectionStatus, RoomConnection } from "./connection.ts";
 
 /** A scene element reduced to the parts a test can compare. */
 export interface InspectedElement {

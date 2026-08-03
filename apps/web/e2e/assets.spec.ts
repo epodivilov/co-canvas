@@ -1,6 +1,6 @@
 import { fileURLToPath } from "node:url";
-import { expect, test } from "./fixtures";
-import { CONVERGENCE_TIMEOUT, expectCount, hasFile, liveElements } from "./helpers";
+import { expect, test } from "./fixtures.ts";
+import { CONVERGENCE_TIMEOUT, expectCount, hasFile, liveElements } from "./helpers.ts";
 
 const FIXTURE_PNG = fileURLToPath(new URL("./fixtures/dot.png", import.meta.url));
 

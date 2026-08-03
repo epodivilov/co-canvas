@@ -13,11 +13,11 @@ import {
   PROTOCOL_VERSION,
 } from "@co-canvas/protocol";
 import { WebSocket, WebSocketServer } from "ws";
-import { createPersistence } from "./persistence";
-import { UnsupportedLogVersionError } from "./room-log";
-import { createRoomRegistry } from "./rooms";
-import { createStaticHandler } from "./static-files";
-import { attachConnection } from "./sync";
+import { createPersistence } from "./persistence.ts";
+import { UnsupportedLogVersionError } from "./room-log.ts";
+import { createRoomRegistry } from "./rooms.ts";
+import { createStaticHandler } from "./static-files.ts";
+import { attachConnection } from "./sync.ts";
 
 /** WebSocket paths under this prefix address a room. Nothing else upgrades. */
 const SYNC_PREFIX = "/sync/";

@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createHub } from "@co-canvas/hub";
 import { type Browser, test as base, type Page } from "@playwright/test";
-import { type OpenOptions, openPage, openPeer } from "./helpers";
+import { type OpenOptions, openPage, openPeer } from "./helpers.ts";
 
 /** A hub running in the test process, which the specs can stop and restart. */
 export interface TestHub {

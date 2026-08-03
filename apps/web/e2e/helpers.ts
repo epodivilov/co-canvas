@@ -1,7 +1,7 @@
 import type { Browser, Page } from "@playwright/test";
 import { expect } from "@playwright/test";
-import type { ConnectionStatus } from "../src/room/connection";
-import type { InspectedElement, InspectedEntry } from "../src/room/inspect";
+import type { ConnectionStatus } from "../src/room/connection.ts";
+import type { InspectedElement, InspectedEntry } from "../src/room/inspect.ts";
 
 /** Empty canvas away from every Excalidraw control, safe to click for focus. */
 const FOCUS_POINT = { x: 1000, y: 700 } as const;

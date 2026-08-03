@@ -1,4 +1,4 @@
-import { expect, test } from "./fixtures";
+import { expect, test } from "./fixtures.ts";
 import {
   CONVERGENCE_TIMEOUT,
   dragFrom,
@@ -10,7 +10,7 @@ import {
   selectAt,
   sleep,
   waitForState,
-} from "./helpers";
+} from "./helpers.ts";
 
 test.describe("R2 — propagation and isolation", () => {
   test("edits made on either side reach the other", async ({ room }) => {

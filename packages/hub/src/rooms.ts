@@ -1,8 +1,8 @@
 import type { RoomSlug } from "@co-canvas/protocol";
 import * as Y from "yjs";
-import type { Persistence, RoomStore } from "./persistence";
-import type { Room } from "./sync";
-import { createRoom } from "./sync";
+import type { Persistence, RoomStore } from "./persistence.ts";
+import type { Room } from "./sync.ts";
+import { createRoom } from "./sync.ts";
 
 /** What `/__rooms` reports for a single room. */
 export interface RoomSummary {

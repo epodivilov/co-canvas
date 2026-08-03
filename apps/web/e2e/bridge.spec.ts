@@ -1,7 +1,7 @@
 import type { Page } from "@playwright/test";
-import { type BridgeClient, observeRoom, type RoomObserver, startBridge } from "./bridge-client";
-import { expect, test } from "./fixtures";
-import { liveElements, liveIds } from "./helpers";
+import { type BridgeClient, observeRoom, type RoomObserver, startBridge } from "./bridge-client.ts";
+import { expect, test } from "./fixtures.ts";
+import { liveElements, liveIds } from "./helpers.ts";
 
 /**
  * The font string Excalidraw measures a default-family label against — see its

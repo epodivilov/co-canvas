@@ -1,4 +1,4 @@
-import type { ConnectionStatus } from "./connection";
+import type { ConnectionStatus } from "./connection.ts";
 
 const LABELS: Record<ConnectionStatus, string> = {
   connecting: "Connecting…",

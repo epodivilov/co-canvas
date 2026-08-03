@@ -1,8 +1,8 @@
 import { PROTOCOL_VERSION } from "@co-canvas/protocol";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import type { Hub } from "./index";
-import { createHub } from "./index";
-import { createClientPool, createDataDirPool, getJson, stopHubs, waitFor } from "./test-helpers";
+import type { Hub } from "./index.ts";
+import { createHub } from "./index.ts";
+import { createClientPool, createDataDirPool, getJson, stopHubs, waitFor } from "./test-helpers.ts";
 
 interface RoomsPayload {
   rooms: Array<{ slug: string; peers: number; docBytes: number }>;
