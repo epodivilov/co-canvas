@@ -1,7 +1,7 @@
 import type { RoomSlug } from "@co-canvas/protocol";
 
 /** Where a pathname sends the app. */
-export type Route = { kind: "room"; slug: RoomSlug } | { kind: "placeholder" };
+export type Route = { kind: "room"; slug: RoomSlug } | { kind: "overview" };
 
 const ROOM_PREFIX = "/room/";
 
@@ -14,12 +14,12 @@ const ROOM_PREFIX = "/room/";
  * it — a path no browser could ever reach.
  *
  * `/room/` carries no slug and so is not a room: it falls through to the same
- * placeholder as any unknown path rather than opening a connection to a room
- * with an empty name.
+ * overview as the root and any unknown path rather than opening a connection to
+ * a room with an empty name.
  */
 export function parseRoute(pathname: string): Route {
-  if (!pathname.startsWith(ROOM_PREFIX)) return { kind: "placeholder" };
+  if (!pathname.startsWith(ROOM_PREFIX)) return { kind: "overview" };
   const slug = pathname.slice(ROOM_PREFIX.length);
-  if (slug === "") return { kind: "placeholder" };
+  if (slug === "") return { kind: "overview" };
   return { kind: "room", slug };
 }

@@ -52,6 +52,58 @@ export async function getJson(baseUrl: string, path: string): Promise<unknown> {
   return JSON.parse(response.body.toString("utf8"));
 }
 
+/** A JSON response with its status and headers, for the board endpoints. */
+export interface JsonResponse {
+  status: number;
+  headers: IncomingHttpHeaders;
+  /** Parsed JSON body, or the raw string when the body was not JSON, or `null` when empty. */
+  body: unknown;
+}
+
+/**
+ * Issues a request with an optional JSON body and reads the JSON answer back.
+ *
+ * Carries an `Origin` header so the board endpoints' CORS handling is exercised
+ * exactly as a browser would exercise it, and returns the headers so a test can
+ * assert the cross-origin allowance is on the wire.
+ */
+export function sendJson(
+  baseUrl: string,
+  method: string,
+  path: string,
+  payload?: unknown,
+): Promise<JsonResponse> {
+  const { hostname, port } = new URL(baseUrl);
+  const data = payload === undefined ? undefined : Buffer.from(JSON.stringify(payload));
+  const headers: Record<string, string | number> = { origin: "http://overview.test" };
+  if (data !== undefined) {
+    headers["content-type"] = "application/json";
+    headers["content-length"] = data.byteLength;
+  }
+  return new Promise((resolve, reject) => {
+    const req = httpRequest({ hostname, port, path, method, headers }, (res) => {
+      const chunks: Buffer[] = [];
+      res.on("data", (chunk: Buffer) => chunks.push(chunk));
+      res.on("error", reject);
+      res.on("end", () => {
+        const raw = Buffer.concat(chunks).toString("utf8");
+        let body: unknown = null;
+        if (raw.length > 0) {
+          try {
+            body = JSON.parse(raw);
+          } catch {
+            body = raw;
+          }
+        }
+        resolve({ status: res.statusCode ?? 0, headers: res.headers, body });
+      });
+    });
+    req.on("error", reject);
+    if (data !== undefined) req.write(data);
+    req.end();
+  });
+}
+
 /** Resolves once `predicate` holds, throws when it never does. */
 export async function waitFor(
   predicate: () => boolean | Promise<boolean>,

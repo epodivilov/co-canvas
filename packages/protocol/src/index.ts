@@ -63,3 +63,34 @@ export const ROOM_SLUG_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/;
 export function isRoomSlug(value: string): boolean {
   return ROOM_SLUG_PATTERN.test(value);
 }
+
+/**
+ * The slug rule stated for a human, built from {@link ROOM_SLUG_PATTERN} rather
+ * than restated, so the pattern and the message a person reads cannot drift.
+ * Shared so the hub's refusal and the overview's inline hint say the same thing.
+ */
+export const ROOM_SLUG_RULE =
+  `a board slug must match ${ROOM_SLUG_PATTERN.source}: lowercase letters, digits` +
+  " and hyphens, starting with a letter or a digit, at most 64 characters";
+
+/**
+ * One board as the overview sees it: the log-derived facts the hub already keeps
+ * ({@link createdAt}, {@link updatedAt}, {@link bytes}) merged with the human
+ * metadata it stores separately ({@link title}, {@link archived}).
+ *
+ * Shared between the hub that answers the board-list endpoint and the web
+ * overview that renders it, so the wire shape has one definition.
+ */
+export interface BoardListing {
+  slug: RoomSlug;
+  /** The human title, or `null` when none has been set and the slug stands in. */
+  title: string | null;
+  /** Whether the board has been archived out of the default overview. */
+  archived: boolean;
+  /** When the board was first written, from its log header. */
+  createdAt: number;
+  /** When it was last written, from its log. */
+  updatedAt: number;
+  /** Size of its log on disk. */
+  bytes: number;
+}
