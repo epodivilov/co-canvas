@@ -1,5 +1,5 @@
 {
-  "name": "co-canvas",
+  "name": "@co-canvas/monorepo",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -11,7 +11,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "build": "pnpm --filter @co-canvas/web build && pnpm --filter @co-canvas/mcp-bridge build && pnpm --filter @co-canvas/hub-cli build",
+    "build": "pnpm --filter @co-canvas/web build && pnpm --filter @co-canvas/mcp-bridge build && pnpm --filter @co-canvas/hub-cli build && pnpm --filter co-canvas build",
     "build:binary": "pnpm --filter @co-canvas/web build && pnpm --filter @co-canvas/hub-cli build:binary",
     "typecheck": "pnpm -r typecheck",
     "lint": "biome check .",

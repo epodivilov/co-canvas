@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["node"],
+    // The bridge source is bundled without a `@co-canvas/*` package.json dep, so
+    // typechecking resolves the same specifiers straight to their source. This
+    // mirrors the tsdown aliases; neither is a runtime dependency.
+    "paths": {
+      "@co-canvas/mcp-bridge": ["../mcp-bridge/src/index.ts"],
+      "@co-canvas/hub-client": ["../../packages/hub-client/src/index.ts"],
+      "@co-canvas/protocol": ["../../packages/protocol/src/index.ts"]
+    }
+  },
+  "include": ["src", "tsdown.config.ts"]
+}

@@ -1,0 +1,33 @@
+{
+  "name": "co-canvas",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Shared live whiteboard for AI agents and humans, as one npx-installable MCP server",
+  "license": "MIT",
+  "author": "Evgenii Podivilov",
+  "bin": {
+    "co-canvas": "./dist/main.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsdown && node scripts/stage-hub.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "prepublishOnly": "pnpm --filter @co-canvas/web build && pnpm --filter @co-canvas/hub-cli build && pnpm run build"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "fractional-indexing": "^3.2.0",
+    "y-websocket": "^3.0.0",
+    "yjs": "^13.6.31",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@excalidraw/excalidraw": "0.18.1",
+    "@types/node": "^26.1.2",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "tsdown": "^0.22.14"
+  }
+}
