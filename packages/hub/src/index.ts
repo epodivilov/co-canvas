@@ -13,6 +13,7 @@ import {
   PROTOCOL_VERSION,
 } from "@co-canvas/protocol";
 import { WebSocket, WebSocketServer } from "ws";
+import { createBoardEndpoints } from "./board-endpoints.ts";
 import { createPersistence } from "./persistence.ts";
 import { UnsupportedLogVersionError } from "./room-log.ts";
 import { createRoomRegistry } from "./rooms.ts";
@@ -140,6 +141,7 @@ export function createHub(options: HubOptions = {}): Hub {
   // anything else from watching.
   const peerListeners = new Set<(totalPeers: number) => void>();
   const persistence = createPersistence(dataDir);
+  const boardEndpoints = createBoardEndpoints(persistence);
   const rooms = createRoomRegistry({
     persistence,
     idlePeriodMs,
@@ -179,6 +181,11 @@ export function createHub(options: HubOptions = {}): Hub {
       response.end(JSON.stringify({ rooms: rooms.summarise() }));
       return;
     }
+
+    // The overview's data plane: the persisted board list and the create /
+    // rename / archive / restore operations. Matched here, ahead of the static
+    // fallback, so they answer as JSON rather than as the SPA's index.html.
+    if (await boardEndpoints(request, response, pathname)) return;
 
     if (serveStatic !== null && (await serveStatic(pathname, response))) return;
 

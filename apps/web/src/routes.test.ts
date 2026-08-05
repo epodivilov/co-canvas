@@ -7,17 +7,17 @@ describe("parseRoute", () => {
   });
 
   it("does not match a room without a slug", () => {
-    expect(parseRoute("/room/")).toEqual({ kind: "placeholder" });
+    expect(parseRoute("/room/")).toEqual({ kind: "overview" });
   });
 
   it("does not match the bare /room path", () => {
-    expect(parseRoute("/room")).toEqual({ kind: "placeholder" });
+    expect(parseRoute("/room")).toEqual({ kind: "overview" });
   });
 
-  it("falls through to the placeholder for the overview and unknown paths", () => {
-    expect(parseRoute("/")).toEqual({ kind: "placeholder" });
-    expect(parseRoute("/board/alpha")).toEqual({ kind: "placeholder" });
-    expect(parseRoute("/roomy/alpha")).toEqual({ kind: "placeholder" });
+  it("routes the root and unknown paths to the overview", () => {
+    expect(parseRoute("/")).toEqual({ kind: "overview" });
+    expect(parseRoute("/board/alpha")).toEqual({ kind: "overview" });
+    expect(parseRoute("/roomy/alpha")).toEqual({ kind: "overview" });
   });
 
   it("hands a slug the hub would refuse straight through", () => {

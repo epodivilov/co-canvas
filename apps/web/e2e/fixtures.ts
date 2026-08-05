@@ -26,9 +26,16 @@ export interface RoomOpener {
   page(slug: string, options?: OpenOptions): Promise<Page>;
 }
 
+/** Opens the board overview at `/`, pointed at the fixture hub. */
+export interface OverviewOpener {
+  /** A fresh isolated context on the overview page, pointed at the fixture hub. */
+  open(): Promise<Page>;
+}
+
 interface Fixtures {
   hub: TestHub;
   room: RoomOpener;
+  overview: OverviewOpener;
 }
 
 /**
@@ -93,6 +100,24 @@ export const test = base.extend<Fixtures>({
 
     // Contexts outlive the test otherwise, and a suite of eighteen scenarios
     // would end up holding several dozen of them open at once.
+    for (const page of opened) await page.context().close();
+  },
+
+  overview: async ({ browser, hub }, use) => {
+    const opened: Page[] = [];
+
+    await use({
+      open: async () => {
+        const context = await browser.newContext();
+        const page = await context.newPage();
+        // The `hub` param carries the fixture hub's port, so the overview's
+        // board-list client reaches this test's hub rather than the default one.
+        await page.goto(`/?hub=${encodeURIComponent(hub.url)}`);
+        opened.push(page);
+        return page;
+      },
+    });
+
     for (const page of opened) await page.context().close();
   },
 });

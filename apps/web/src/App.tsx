@@ -1,4 +1,4 @@
-import { PROTOCOL_VERSION } from "@co-canvas/protocol";
+import { Overview } from "./overview/Overview.tsx";
 import { RoomView } from "./room/RoomView.tsx";
 import { parseRoute } from "./routes.ts";
 
@@ -10,16 +10,5 @@ import { parseRoute } from "./routes.ts";
 export function App() {
   const route = parseRoute(window.location.pathname);
   if (route.kind === "room") return <RoomView slug={route.slug} />;
-  return <Placeholder />;
-}
-
-/** The board overview lands in CC-4. */
-function Placeholder() {
-  return (
-    <main className="placeholder">
-      <h1>co-canvas</h1>
-      <p>protocol v{PROTOCOL_VERSION}</p>
-      <p>Open a board at /room/&lt;name&gt;.</p>
-    </main>
-  );
+  return <Overview />;
 }

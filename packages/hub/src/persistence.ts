@@ -1,10 +1,12 @@
 import { constants } from "node:fs";
 import { access, mkdir } from "node:fs/promises";
-import type { RoomSlug } from "@co-canvas/protocol";
+import type { BoardListing, RoomSlug } from "@co-canvas/protocol";
 import * as Y from "yjs";
 import type { RoomIndexEntry } from "./room-index.ts";
 import { rebuildRoomIndex, writeRoomIndex } from "./room-index.ts";
 import { appendToLog, loadRoomLog, publishLog, roomsDir } from "./room-log.ts";
+import type { RoomMetadata } from "./room-metadata.ts";
+import { readRoomMetadata, writeRoomMetadata } from "./room-metadata.ts";
 
 /**
  * Quiet period after the last edit before a room's buffer reaches disk.
@@ -29,6 +31,23 @@ export const COMPACT_GROWTH_FACTOR = 2;
  * straight back into the log, doubling the file on every hub restart.
  */
 export const LOAD_ORIGIN = Symbol("co-canvas/persistence/load");
+
+/** Raised when a mutation names a board the hub does not hold. */
+export class BoardNotFoundError extends Error {
+  readonly slug: RoomSlug;
+  constructor(slug: RoomSlug) {
+    super(`no board named "${slug}"`);
+    this.name = "BoardNotFoundError";
+    this.slug = slug;
+  }
+}
+
+/** What creating a board reports: the board, and whether it was new. */
+export interface BoardCreation {
+  board: BoardListing;
+  /** `false` when the slug already named a board, which is returned untouched. */
+  created: boolean;
+}
 
 /** The disk side of one live room. */
 export interface RoomStore {
@@ -56,6 +75,21 @@ export interface Persistence {
   openRoom(slug: RoomSlug, doc: Y.Doc): Promise<RoomStore>;
   /** Publishes anything the index still owes. */
   settle(): Promise<void>;
+  /**
+   * Every board on disk as the overview sees it: the log-derived index entry
+   * merged with the board's durable human metadata (title, archived).
+   */
+  listBoards(): BoardListing[];
+  /**
+   * Materialises a board so it shows up even when nobody has drawn on it, and
+   * reports whether it was new. Idempotent: a slug that already names a board is
+   * returned untouched, its log left exactly as it was.
+   */
+  createBoard(slug: RoomSlug): Promise<BoardCreation>;
+  /** Sets a board's title — `null` clears it back to the slug. Never touches the log. */
+  setBoardTitle(slug: RoomSlug, title: string | null): Promise<BoardListing>;
+  /** Archives or restores a board. Visibility only: the log and route are untouched. */
+  setBoardArchived(slug: RoomSlug, archived: boolean): Promise<BoardListing>;
 }
 
 interface LogState {
@@ -68,6 +102,42 @@ interface LogState {
 
 export function createPersistence(dataDir: string): Persistence {
   const entries = new Map<RoomSlug, RoomIndexEntry>();
+
+  // The durable human metadata for each board, kept independent of `entries`:
+  // `entries` is rebuilt from the logs on every start, this is not, so a title
+  // or an archived flag set here outlives the rebuild that would otherwise erase
+  // it. Only boards with a metadata entry appear here; the rest carry defaults.
+  const metadata = new Map<RoomSlug, RoomMetadata>();
+
+  // Metadata writes are serialised and awaited by their caller: they are rare,
+  // human-driven, and the endpoint must be able to promise durability before it
+  // answers, so unlike the index they are not fire-and-forget.
+  let metadataTask: Promise<void> = Promise.resolve();
+
+  function persistMetadata(): Promise<void> {
+    const run = metadataTask.then(
+      () => writeRoomMetadata(dataDir, metadata),
+      () => writeRoomMetadata(dataDir, metadata),
+    );
+    metadataTask = run.then(
+      () => {},
+      () => {},
+    );
+    return run;
+  }
+
+  /** Merges a log-derived index entry with the board's durable human metadata. */
+  function toBoardListing(entry: RoomIndexEntry): BoardListing {
+    const meta = metadata.get(entry.slug);
+    return {
+      slug: entry.slug,
+      title: meta?.title ?? null,
+      archived: meta?.archived ?? false,
+      createdAt: entry.createdAt,
+      updatedAt: entry.updatedAt,
+      bytes: entry.bytes,
+    };
+  }
 
   // The index is a cache of the logs, so its writes are coalesced rather than
   // ordered against them: a flush that lands while a write is in flight simply
@@ -100,6 +170,11 @@ export function createPersistence(dataDir: string): Persistence {
     for (const [slug, entry] of await rebuildRoomIndex(dataDir)) entries.set(slug, entry);
     // Also the writability probe for the data directory itself.
     await writeRoomIndex(dataDir, entries.values());
+
+    // The metadata store is loaded, not rebuilt: nothing in the logs can
+    // reconstruct a title or an archived flag, so this is the whole of it.
+    metadata.clear();
+    for (const [slug, meta] of await readRoomMetadata(dataDir)) metadata.set(slug, meta);
   }
 
   async function openRoom(slug: RoomSlug, doc: Y.Doc): Promise<RoomStore> {
@@ -253,7 +328,63 @@ export function createPersistence(dataDir: string): Persistence {
   async function settle(): Promise<void> {
     await indexTask;
     await writeIfDirty();
+    await metadataTask;
   }
 
-  return { dataDir, prepare, openRoom, settle };
+  function listBoards(): BoardListing[] {
+    return [...entries.values()].map(toBoardListing);
+  }
+
+  async function createBoard(slug: RoomSlug): Promise<BoardCreation> {
+    const known = entries.get(slug);
+    if (known !== undefined) return { board: toBoardListing(known), created: false };
+
+    // Materialise the board on disk. `loadRoomLog` writes an empty header-only
+    // log when none exists, so a board a person makes but never draws on still
+    // has a log — and therefore an index entry — from the moment it is named.
+    const loaded = await loadRoomLog(dataDir, slug);
+    const entry: RoomIndexEntry = {
+      slug,
+      createdAt: loaded.createdAt,
+      updatedAt: loaded.createdAt,
+      bytes: loaded.bytes,
+    };
+    touchIndex(entry);
+    return { board: toBoardListing(entry), created: true };
+  }
+
+  async function mutateMetadata(
+    slug: RoomSlug,
+    change: (current: RoomMetadata) => RoomMetadata,
+  ): Promise<BoardListing> {
+    const entry = entries.get(slug);
+    // A title or archive only ever decorates a board that exists. Refusing an
+    // unknown slug keeps the metadata store from growing orphans the index can
+    // never account for.
+    if (entry === undefined) throw new BoardNotFoundError(slug);
+
+    const current = metadata.get(slug) ?? { title: null, archived: false };
+    metadata.set(slug, change(current));
+    await persistMetadata();
+    return toBoardListing(entry);
+  }
+
+  function setBoardTitle(slug: RoomSlug, title: string | null): Promise<BoardListing> {
+    return mutateMetadata(slug, (current) => ({ ...current, title }));
+  }
+
+  function setBoardArchived(slug: RoomSlug, archived: boolean): Promise<BoardListing> {
+    return mutateMetadata(slug, (current) => ({ ...current, archived }));
+  }
+
+  return {
+    dataDir,
+    prepare,
+    openRoom,
+    settle,
+    listBoards,
+    createBoard,
+    setBoardTitle,
+    setBoardArchived,
+  };
 }
