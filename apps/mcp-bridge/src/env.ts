@@ -8,7 +8,7 @@
  * facts about itself. The same number can travel through both, but only one of
  * them is a request.
  */
-import { createRequire } from "node:module";
+import { fileURLToPath } from "node:url";
 import type { CommandSpec } from "./command.ts";
 import { parseCommandSpec } from "./command.ts";
 import { platformOpenCommand } from "./opener.ts";
@@ -57,26 +57,19 @@ export function resolveOpenCommand(env: NodeJS.ProcessEnv): CommandSpec {
 }
 
 /**
- * Path of the built hub entry point.
+ * Path of the hub entry point that ships inside this package.
  *
- * `createRequire().resolve` rather than `import.meta.resolve`: the former
- * throws `MODULE_NOT_FOUND` when the file is not there, which is the actionable
- * "build it, or name your own command" error. The latter hands back a `file://`
- * URL for a path that does not exist, turning an unbuilt `dist` into a spawn
- * failure several seconds and one confusing message later.
+ * Resolved relative to this module rather than through the workspace, which is
+ * CC-6's decision on how the hub finally ships: the `co-canvas` package stages
+ * the hub's Node build beside its own bundle at `dist/hub/main.js`, and the
+ * bundler rewrites nothing about `import.meta.url`, so the same expression
+ * points at that staged file from an install where no `@co-canvas/*` package
+ * exists. The bridge spawns it with `process.execPath` — the running Node.
  *
- * How the hub finally ships is CC-6's decision; this default is provisional and
- * deliberately overridable.
+ * No existence check: this is called on every tool call to build the start
+ * command, even when a hub is already running and the command is never spawned.
+ * A missing file surfaces as a spawn error only if a hub actually has to start.
  */
 function hubCliEntry(): string {
-  try {
-    return createRequire(import.meta.url).resolve("@co-canvas/hub-cli/dist/main.js");
-  } catch (error) {
-    throw new Error(
-      "cannot find the co-canvas hub entry point (@co-canvas/hub-cli/dist/main.js)." +
-        ` Build the workspace with \`pnpm build\`, or name a hub command in ${HUB_CMD_ENV}` +
-        " as a JSON array of the executable and its arguments",
-      { cause: error },
-    );
-  }
+  return fileURLToPath(new URL("./hub/main.js", import.meta.url));
 }
