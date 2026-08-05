@@ -1,5 +1,7 @@
 node_modules/
 dist/
+# Release assets staged by scripts/release-publish.sh (the three hub binaries).
+dist-release/
 *.tsbuildinfo
 .DS_Store
 test-results/
