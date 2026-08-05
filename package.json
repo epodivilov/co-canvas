@@ -19,10 +19,12 @@
     "format": "biome format --write .",
     "test": "vitest run",
     "test:e2e": "pnpm --filter @co-canvas/web test:e2e",
-    "check": "biome check . && pnpm -r typecheck && pnpm test"
+    "check": "biome check . && pnpm -r typecheck && pnpm test",
+    "changeset": "changeset"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.6",
+    "@changesets/cli": "^2.31.1",
     "@types/node": "^26.1.2",
     "jsdom": "^28.1.0",
     "tsdown": "^0.22.14",

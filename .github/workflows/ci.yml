@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# A newer push to the same ref supersedes an in-flight run.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the changeset gate below diffs against main; needs full history
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      # The hub ships as a `bun --compile` binary and packages/hub has a Bun-runtime test
+      # (bun-runtime.test.ts) that `skipIf`s when Bun is absent. Install Bun so that test runs
+      # for real rather than silently skipping (R2), and so the release path's compile is proven.
+      - uses: oven-sh/setup-bun@v2
+
+      - run: pnpm install --frozen-lockfile
+
+      # Build first: the co-canvas package and mcp-bridge tests drive their built dist, and the
+      # e2e specs spawn `apps/mcp-bridge/dist/main.js`. A broken build fails the gate here.
+      - run: pnpm build
+
+      - run: pnpm typecheck
+
+      - run: pnpm test
+
+      # e2e lane: Playwright drives the built frontend + a spawned hub/bridge over real stdio.
+      # Needs the Chromium browser installed and the prior `pnpm build` (above) on disk.
+      - run: pnpm --filter @co-canvas/web exec playwright install --with-deps chromium
+      - run: pnpm test:e2e
+
+      - run: pnpm lint
+
+      # A PR that changes the versioned `co-canvas` package must ship a changeset (CC-25), so no
+      # user-facing change silently drops out of the changelog / version bump. `changeset status
+      # --since` exits non-zero when co-canvas changed since main but no changeset was added.
+      #
+      # Escape hatch for release-irrelevant changes that still touch the package (comment/test-only,
+      # chore): commit an empty changeset via `pnpm changeset add --empty`.
+      #
+      # Skipped for the changesets "Version Packages" PR (branch `changeset-release/main`): that PR
+      # consumes the changesets, so it legitimately has none and must not be blocked.
+      #
+      # Runs as the last steps of `check` rather than its own job: a separate runner paid a full
+      # billed minute for seconds of work plus a second `pnpm install`. Last on purpose, so a
+      # missing changeset never masks a failing test.
+      #
+      # checkout only wires up the PR ref; materialize origin/main explicitly so `--since`
+      # resolves it. Without the ref changesets swallows the error and reports no changed
+      # packages — i.e. the gate would silently pass. The explicit refspec avoids that.
+      - name: Fetch main for the changeset gate
+        if: github.event_name == 'pull_request' && github.head_ref != 'changeset-release/main'
+        run: git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+
+      - name: Changeset gate
+        if: github.event_name == 'pull_request' && github.head_ref != 'changeset-release/main'
+        run: pnpm changeset status --since=origin/main

@@ -1,0 +1,73 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+    # Most pushes to main are release-irrelevant and this workflow no-ops on them. Both real paths
+    # touch these files: opening/updating the Version PR needs a changeset, and the publish push is
+    # the Version PR merge itself (which deletes the consumed changesets and bumps package.json).
+    paths:
+      - ".changeset/**"
+      - "package.json"
+      - "**/package.json"
+
+  # A `paths` miss skips silently, so keep a manual trigger to run a release that was filtered out.
+  workflow_dispatch:
+
+# Serialize releases; never cancel a publish mid-flight.
+concurrency:
+  group: release-main
+  cancel-in-progress: false
+
+permissions:
+  contents: write # create tags + GitHub Releases
+  pull-requests: write # open/update the "Version Packages" PR
+  id-token: write # npm trusted publishing (OIDC) — no long-lived npm token lives in the repo
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # changesets needs full history
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          registry-url: "https://registry.npmjs.org" # so npm publish targets the public registry
+
+      # npm trusted publishing (OIDC) needs npm >= 11.5.1. Node 24 ships npm 11.x; take the latest
+      # to be safe. No NPM_TOKEN is set — npm exchanges the GitHub OIDC token at publish time.
+      - run: npm install -g npm@latest
+
+      # The three co-canvas-hub binaries are `bun --compile`d by release-publish.sh; bun on PATH.
+      - uses: oven-sh/setup-bun@v2
+
+      - run: pnpm install --frozen-lockfile
+
+      # When changesets exist on main → opens/updates the "Version Packages" PR (runs
+      # `changeset version`, bumping only `co-canvas`). When none remain (that PR was merged) →
+      # runs `publish`, which cross-compiles the three hub binaries, cuts the co-canvas GitHub
+      # Release with them attached, and publishes co-canvas to npm via OIDC.
+      - uses: changesets/action@v1
+        id: changesets
+        with:
+          version: pnpm changeset version
+          publish: bash scripts/release-publish.sh
+          createGithubReleases: false # release-publish.sh owns release creation
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # changesets/action's `title` input is a static string evaluated before `changeset version`,
+      # so it can't carry the bumped version. Retitle the just-opened/updated PR to name the
+      # package + new version. Skipped on the merge push (no PR number).
+      - name: Title the Version Packages PR with the bumped version
+        if: steps.changesets.outputs.pullRequestNumber
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash scripts/title-version-pr.sh "${{ steps.changesets.outputs.pullRequestNumber }}"
