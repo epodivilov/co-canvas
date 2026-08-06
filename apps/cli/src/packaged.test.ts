@@ -176,6 +176,25 @@ describe("the packed co-canvas tarball", () => {
     }
   }, 60_000);
 
+  it("reports the built package version in serverInfo, not a hardcoded 0.0.0 (CC-27 R1)", async () => {
+    const s = await session({});
+    try {
+      // `getServerVersion()` returns the `serverInfo` the server sent on the
+      // initialize handshake `connectMcp` already completed.
+      const info = s.mcp.client.getServerVersion();
+      // The manifest is read from the tarball at test time — the same `version`
+      // as `apps/cli/package.json`. Asserting it equals the current manifest
+      // version, and is not the old `0.0.0` placeholder, catches the regression
+      // this fix closes (the reverted constant) and a stale hardcode on the next
+      // Changesets bump.
+      expect(info?.version).toBe(manifest.version);
+      // The bug this closes: the constant used to be "0.0.0" for every release.
+      expect(info?.version).not.toBe("0.0.0");
+    } finally {
+      await s.close();
+    }
+  }, 60_000);
+
   it("serves the packaged frontend, its assets, and keeps endpoints JSON (R3)", async () => {
     const s = await session({});
     try {
