@@ -183,9 +183,10 @@ describe("the packed co-canvas tarball", () => {
       // initialize handshake `connectMcp` already completed.
       const info = s.mcp.client.getServerVersion();
       // The manifest is read from the tarball at test time — the same `version`
-      // as `apps/cli/package.json`. Asserting equality to it, rather than to a
-      // literal, is the proof the reported value is injected from the manifest
-      // and follows a Changesets bump untouched, not re-hardcoded in the source.
+      // as `apps/cli/package.json`. Asserting it equals the current manifest
+      // version, and is not the old `0.0.0` placeholder, catches the regression
+      // this fix closes (the reverted constant) and a stale hardcode on the next
+      // Changesets bump.
       expect(info?.version).toBe(manifest.version);
       // The bug this closes: the constant used to be "0.0.0" for every release.
       expect(info?.version).not.toBe("0.0.0");

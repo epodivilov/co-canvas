@@ -27,8 +27,9 @@ describe("serverInfo.version (CC-27 R2)", () => {
       // `getServerVersion()` is the `serverInfo` the initialize handshake carried.
       const info = client.getServerVersion();
       expect(info?.name).toBe("co-canvas");
-      expect(typeof info?.version).toBe("string");
-      expect(info?.version).not.toBe("");
+      // The unbuilt path yields the `"0.0.0"` fallback (no define applied); that
+      // it resolves at all proves no `ReferenceError` on the undeclared token.
+      expect(info?.version).toBe("0.0.0");
     } finally {
       await client.close();
       await bridge.close();
