@@ -11,8 +11,15 @@ const from = (path: string): string => fileURLToPath(new URL(path, import.meta.u
  * A filesystem read rather than a JSON import: `verbatimModuleSyntax` is on, and
  * this stays a plain config value with no import-attribute plumbing.
  */
-const version = (JSON.parse(readFileSync(from("./package.json"), "utf8")) as { version: string })
-  .version;
+const { version } = JSON.parse(readFileSync(from("./package.json"), "utf8")) as {
+  version?: unknown;
+};
+if (typeof version !== "string" || version === "") {
+  throw new Error(
+    "apps/cli/package.json has no `version` string to bake into __CO_CANVAS_VERSION__;" +
+      " a missing version would emit a malformed `define`. Set a version before building.",
+  );
+}
 
 export default defineConfig({
   entry: ["src/main.ts"],

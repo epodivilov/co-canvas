@@ -14,7 +14,8 @@ import { elementsOf, readScene } from "./elements.ts";
 import type { RoomAccess } from "./room.ts";
 import { openRoom } from "./room.ts";
 
-const extentShape = z.object({
+/** A min/max box in scene units — one element's footprint, or the whole scene's extent. */
+const boxShape = z.object({
   minX: z.number(),
   minY: z.number(),
   maxX: z.number(),
@@ -57,12 +58,10 @@ const shapeShape = z.object({
     .array(z.object({ x: z.number(), y: z.number() }))
     .nullable()
     .describe("For a linear element, its points in absolute scene coordinates; null otherwise."),
-  bounds: z
-    .object({ minX: z.number(), minY: z.number(), maxX: z.number(), maxY: z.number() })
-    .describe(
-      "The true axis-aligned footprint, rotation applied. Equals the stored box for a flat" +
-        " element and differs for a turned one; test overlaps against this, not x/y/width/height.",
-    ),
+  bounds: boxShape.describe(
+    "The true axis-aligned footprint, rotation applied. Equals the stored box for a flat" +
+      " element and differs for a turned one; test overlaps against this, not x/y/width/height.",
+  ),
 });
 
 /** A `Described` element as the tool reports it — its box, identity and bindings. */
@@ -111,7 +110,7 @@ export function registerDescribeTool(server: McpServer, deps: RoomAccess): void 
           .int()
           .describe("Elements described as nodes: everything but arrows, frames and labels."),
         arrows: z.number().int().describe("Arrows on the board."),
-        extent: extentShape
+        extent: boxShape
           .nullable()
           .describe("Box enclosing everything on the board; null when it is empty."),
         shapes: z
