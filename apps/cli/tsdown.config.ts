@@ -1,8 +1,18 @@
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "tsdown";
 
 /** The workspace source this package bundles, aliased so no `@co-canvas/*` dep is declared. */
 const from = (path: string): string => fileURLToPath(new URL(path, import.meta.url));
+
+/**
+ * The published `co-canvas` version, read from this package's own manifest so a
+ * Changesets bump is the only edit — nothing to keep in sync in `server.ts`.
+ * A filesystem read rather than a JSON import: `verbatimModuleSyntax` is on, and
+ * this stays a plain config value with no import-attribute plumbing.
+ */
+const version = (JSON.parse(readFileSync(from("./package.json"), "utf8")) as { version: string })
+  .version;
 
 export default defineConfig({
   entry: ["src/main.ts"],
@@ -32,6 +42,13 @@ export default defineConfig({
       /^@excalidraw\//,
       /^react(-dom)?(\/|$)/,
     ],
+  },
+  // Replaces the `__CO_CANVAS_VERSION__` token in the bundled bridge source with
+  // this package's version, so its `serverInfo.version` reports the shipped
+  // release instead of a placeholder (CC-27). A `define` value is substituted
+  // verbatim, so it must be a JSON-stringified string.
+  define: {
+    __CO_CANVAS_VERSION__: JSON.stringify(version),
   },
   dts: false,
   clean: true,

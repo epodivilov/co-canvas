@@ -37,7 +37,18 @@ export interface Bridge {
   close(): Promise<void>;
 }
 
-const SERVER_INFO = { name: "co-canvas", version: "0.0.0" } as const;
+/**
+ * The published `co-canvas` version, injected at the `apps/cli` build by a
+ * tsdown `define` that replaces this token with the value in
+ * `apps/cli/package.json` (see `apps/cli/tsdown.config.ts`). The `typeof` guard
+ * makes the read safe when the define was never applied — a dev start or the
+ * vitest suite runs this source unbuilt, and a bare reference to an undefined
+ * token would throw a `ReferenceError` — so those paths fall back instead.
+ */
+declare const __CO_CANVAS_VERSION__: string | undefined;
+const VERSION = typeof __CO_CANVAS_VERSION__ === "string" ? __CO_CANVAS_VERSION__ : "0.0.0";
+
+const SERVER_INFO = { name: "co-canvas", version: VERSION } as const;
 
 const INSTRUCTIONS =
   "co-canvas boards are live whiteboards shared with a human in their browser." +
