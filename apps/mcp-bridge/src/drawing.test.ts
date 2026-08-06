@@ -3,6 +3,7 @@ import type { Harness } from "./test-helpers.ts";
 import {
   createHarness,
   hubRooms,
+  roomElement,
   roomEntries,
   roomIds,
   roomScene,
@@ -12,6 +13,19 @@ import {
 } from "./test-helpers.ts";
 
 let harness: Harness;
+
+/** The touched-element geometry a draw response carries in its structured content. */
+interface TouchedShape {
+  id: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+function shapesOf(result: { structuredContent?: unknown }): TouchedShape[] {
+  return (result.structuredContent as { shapes: TouchedShape[] }).shapes;
+}
 
 beforeEach(async () => {
   harness = await createHarness();
@@ -284,5 +298,81 @@ describe("ids and atomicity", () => {
     expect(new Set(ids).size).toBe(10);
     await waitForCount(peer, 10);
     expect(new Set(roomIds(peer.doc))).toEqual(new Set(ids));
+  });
+});
+
+describe("geometry in the answer", () => {
+  const LONG_LABEL = "Authentication service handles login and token refresh";
+
+  it("reports the grown box of a labelled rectangle, not the requested one (R3)", async () => {
+    const hub = await harness.startHub();
+    const bridge = await harness.connect({ hubPort: hub.port });
+    await bridge.call("create_room", { slug: "alpha" });
+    const peer = await harness.openPeer(hub.url, "alpha");
+
+    const result = await bridge.call("add_elements", {
+      slug: "alpha",
+      elements: [
+        {
+          type: "rectangle",
+          id: "box",
+          x: 0,
+          y: 0,
+          width: 80,
+          height: 20,
+          label: { text: LONG_LABEL },
+        },
+      ],
+    });
+
+    expect(result.isError).toBeFalsy();
+    const box = shapesOf(result).find((shape) => shape.id === "box");
+    // The label wraps and the container grows to hold it: the height reported is
+    // the grown one, not the 20 that was asked for. An agent placing the next
+    // row against 20 would overlap this box — the whole point of CC-28.
+    expect(box).toBeDefined();
+    expect(Number(box?.height)).toBeGreaterThan(20);
+
+    // And it is the box the room actually stores, read back after the write.
+    await waitForCount(peer, 2);
+    expect(Number(box?.width)).toBe(Number(roomElement(peer.doc, "box")?.width));
+    expect(Number(box?.height)).toBe(Number(roomElement(peer.doc, "box")?.height));
+  });
+
+  it("reports the box a later describe_scene reports for the same element (R4)", async () => {
+    const hub = await harness.startHub();
+    const bridge = await harness.connect({ hubPort: hub.port });
+    await bridge.call("create_room", { slug: "alpha" });
+
+    const result = await bridge.call("add_elements", {
+      slug: "alpha",
+      elements: [
+        {
+          type: "rectangle",
+          id: "box",
+          x: 10,
+          y: 20,
+          width: 80,
+          height: 20,
+          label: { text: LONG_LABEL },
+        },
+      ],
+    });
+
+    const drawn = shapesOf(result).find((shape) => shape.id === "box");
+    expect(drawn).toBeDefined();
+
+    const described = await bridge.call("describe_scene", { slug: "alpha" });
+    const read = (described.structuredContent as { shapes: TouchedShape[] }).shapes.find(
+      (shape) => shape.id === "box",
+    );
+    expect(read).toBeDefined();
+    // R4: an agent can trust either without reconciling them.
+    expect({ x: read?.x, y: read?.y, width: read?.width, height: read?.height }).toEqual({
+      x: drawn?.x,
+      y: drawn?.y,
+      width: drawn?.width,
+      height: drawn?.height,
+    });
   });
 });

@@ -2,11 +2,33 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import * as Y from "yjs";
 import { describeScene } from "./describe.ts";
 import type { SceneElement } from "./elements.ts";
-import { arrow, label, rect } from "./scene-helpers.ts";
+import { arrow, frame, label, note, rect } from "./scene-helpers.ts";
 import type { Harness, RoomPeer } from "./test-helpers.ts";
 import { createHarness, hubRooms, settle, textOf, waitFor } from "./test-helpers.ts";
 
 let harness: Harness;
+
+/** One entry of `describe_scene`'s structured per-element geometry (CC-28). */
+interface Shape {
+  id: string;
+  type: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  angle: number;
+  label: string | null;
+  name: string | null;
+  frameId: string | null;
+  groupIds: string[];
+  startBinding: string | null;
+  endBinding: string | null;
+  points: { x: number; y: number }[] | null;
+}
+
+function shapesOf(result: { structuredContent?: unknown }): Shape[] {
+  return (result.structuredContent as { shapes: Shape[] }).shapes;
+}
 
 beforeEach(async () => {
   harness = await createHarness();
@@ -71,10 +93,66 @@ describe("describe_scene (R1)", () => {
       nodes: 2,
       arrows: 1,
       extent: { minX: 100, minY: 100, maxX: 800, maxY: 200 },
+      // CC-28: the same geometry the GEOMETRY appendix reports, as JSON the
+      // agent computes placement from. Bound labels are folded into their
+      // container, exactly as the text folds them.
+      shapes: [
+        {
+          id: "auth",
+          type: "rectangle",
+          x: 100,
+          y: 100,
+          width: 200,
+          height: 100,
+          angle: 0,
+          label: "Auth",
+          name: null,
+          frameId: null,
+          groupIds: [],
+          startBinding: null,
+          endBinding: null,
+          points: null,
+        },
+        {
+          id: "store",
+          type: "rectangle",
+          x: 600,
+          y: 100,
+          width: 200,
+          height: 100,
+          angle: 0,
+          label: "Store",
+          name: null,
+          frameId: null,
+          groupIds: [],
+          startBinding: null,
+          endBinding: null,
+          points: null,
+        },
+        {
+          id: "writes",
+          type: "arrow",
+          x: 300,
+          y: 150,
+          width: 300,
+          height: 0,
+          angle: 0,
+          label: null,
+          name: null,
+          frameId: null,
+          groupIds: [],
+          startBinding: "auth",
+          endBinding: "store",
+          points: [
+            { x: 300, y: 150 },
+            { x: 600, y: 150 },
+          ],
+        },
+      ],
     });
   });
 
-  it("keeps the description out of the summary, and every element with it", async () => {
+  it("carries every element's geometry in the summary, without re-emitting the prose (R1)", async () => {
     const hub = await harness.startHub();
     const bridge = await harness.connect({ hubPort: hub.port });
     await bridge.call("create_room", { slug: "alpha" });
@@ -82,19 +160,82 @@ describe("describe_scene (R1)", () => {
     writeElements(peer, TWO_AND_AN_ARROW);
 
     const result = await bridge.call("describe_scene", { slug: "alpha" });
-    const summary = JSON.stringify(result.structuredContent);
 
-    // Sending the description twice would undo the format's whole cost
-    // advantage, and an element in the summary is the same payload again.
-    expect(summary).not.toContain("SCENE");
-    expect(summary).not.toContain("NODES");
-    for (const id of ["auth", "store", "writes", "auth-label"]) {
-      expect(summary, `summary names ${id}`).not.toContain(id);
+    // CC-28 reverses the old invariant: the summary now carries every element
+    // the text describes — id, type, box and label — so the agent can compute
+    // intersections rather than parse them out of prose.
+    const shapes = shapesOf(result);
+    expect(shapes.map((shape) => shape.id)).toEqual(["auth", "store", "writes"]);
+
+    const auth = shapes.find((shape) => shape.id === "auth");
+    expect(auth).toMatchObject({
+      type: "rectangle",
+      x: 100,
+      y: 100,
+      width: 200,
+      height: 100,
+      label: "Auth",
+    });
+
+    const writes = shapes.find((shape) => shape.id === "writes");
+    expect(writes).toMatchObject({ type: "arrow", startBinding: "auth", endBinding: "store" });
+    // Absolute endpoints, not the near-origin relative pairs.
+    expect(writes?.points).toEqual([
+      { x: 300, y: 150 },
+      { x: 600, y: 150 },
+    ]);
+
+    // What stays out is the prose: the split's point is not to send the rendered
+    // headings, grid and geometry lines a second time as strings.
+    const summary = JSON.stringify(result.structuredContent);
+    for (const heading of ["SCENE", "NODES", "GRID", "CONTAINERS", "GEOMETRY"]) {
+      expect(summary, `summary re-emits ${heading}`).not.toContain(heading);
     }
-    expect(summary).not.toContain("Auth");
-    expect(summary).not.toContain("rectangle");
-    // The extent is the only geometry allowed through.
-    expect(summary).not.toContain("600");
+  });
+
+  it("carries a framed node's frame and a grouped pair's groups (R1)", async () => {
+    const hub = await harness.startHub();
+    const bridge = await harness.connect({ hubPort: hub.port });
+    await bridge.call("create_room", { slug: "alpha" });
+    const peer = await harness.openPeer(hub.url, "alpha");
+    writeElements(peer, [
+      frame("board", 0, 0, 400, 300, "Board"),
+      rect("inside", 40, 40, 120, 80, { frameId: "board" }),
+      rect("left", 600, 0, 120, 80, { groupIds: ["pair"] }),
+      rect("right", 600, 120, 120, 80, { groupIds: ["pair"] }),
+    ]);
+
+    const result = await bridge.call("describe_scene", { slug: "alpha" });
+    const shapes = shapesOf(result);
+
+    expect(shapes.find((shape) => shape.id === "inside")?.frameId).toBe("board");
+    expect(shapes.find((shape) => shape.id === "left")?.groupIds).toEqual(["pair"]);
+    expect(shapes.find((shape) => shape.id === "right")?.groupIds).toEqual(["pair"]);
+  });
+
+  it("carries a loose note as text, and claims no binding an arrow does not have (R1)", async () => {
+    const hub = await harness.startHub();
+    const bridge = await harness.connect({ hubPort: hub.port });
+    await bridge.call("create_room", { slug: "alpha" });
+    const peer = await harness.openPeer(hub.url, "alpha");
+    writeElements(peer, [
+      note("memo", 10, 10, "Remember this"),
+      arrow("floating", 0, 200, [
+        [0, 0],
+        [100, 0],
+      ]),
+    ]);
+
+    const result = await bridge.call("describe_scene", { slug: "alpha" });
+    const shapes = shapesOf(result);
+
+    const memo = shapes.find((shape) => shape.id === "memo");
+    expect(memo?.type).toBe("text");
+    expect(memo?.label).toBe("Remember this");
+
+    const floating = shapes.find((shape) => shape.id === "floating");
+    expect(floating?.startBinding).toBeNull();
+    expect(floating?.endBinding).toBeNull();
   });
 
   it("re-reads the room on every call rather than caching a description", async () => {
@@ -166,6 +307,7 @@ describe("describe_scene (R1)", () => {
       nodes: 0,
       arrows: 0,
       extent: null,
+      shapes: [],
     });
   });
 

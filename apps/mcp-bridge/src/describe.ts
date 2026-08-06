@@ -48,6 +48,15 @@ export interface SceneSummary {
 export interface SceneDescription {
   readonly text: string;
   readonly summary: SceneSummary;
+  /**
+   * Every element the text describes, as structured geometry (CC-28).
+   *
+   * Bound labels are folded into their container, exactly as the text folds
+   * them, so this array lines up one-to-one with what the description names. It
+   * is the same geometry the `GEOMETRY` appendix reports, as data an agent can
+   * compute intersections on rather than parse out of prose.
+   */
+  readonly shapes: readonly Described[];
 }
 
 /**
@@ -90,8 +99,14 @@ interface Bounds {
   readonly maxY: number;
 }
 
-/** One element, reduced to what the description says about it. */
-interface Described {
+/**
+ * One element, reduced to what the description says about it.
+ *
+ * Surfaced by `describe_scene` as structured geometry (CC-28): the same box the
+ * `GEOMETRY` appendix reports, plus the identity and bindings an agent needs to
+ * lay a board out without overlaps.
+ */
+export interface Described {
   readonly id: string;
   readonly type: string;
   readonly x: number;
@@ -144,7 +159,7 @@ export function describeScene(elements: readonly SceneElement[]): SceneDescripti
     arrows: arrows.length,
     extent: extentOf(described),
   };
-  if (summary.extent === null) return { text: EMPTY_BOARD, summary };
+  if (summary.extent === null) return { text: EMPTY_BOARD, summary, shapes: described };
 
   const grid = buildGrid(summary.extent, nodes);
   const byId = new Map(described.map((element) => [element.id, element]));
@@ -183,7 +198,7 @@ export function describeScene(elements: readonly SceneElement[]): SceneDescripti
     ],
   ];
 
-  return { text: blocks.map((block) => block.join("\n")).join("\n\n"), summary };
+  return { text: blocks.map((block) => block.join("\n")).join("\n\n"), summary, shapes: described };
 }
 
 // ---------------------------------------------------------------------------

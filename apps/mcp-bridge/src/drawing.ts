@@ -53,6 +53,21 @@ const resultShape = {
   slug: z.string().describe("The board that changed."),
   url: z.string().describe("URL a browser opens the board at."),
   ids: z.array(z.string()).describe("Ids of the elements this call touched, in order."),
+  shapes: z
+    .array(
+      z.object({
+        id: z.string(),
+        x: z.number(),
+        y: z.number(),
+        width: z.number(),
+        height: z.number(),
+      }),
+    )
+    .describe(
+      "The final box of each element this call touched — after any bound-label grow," +
+        " read back from the document. Place the next element against these, not against the" +
+        " sizes requested. Equal to what describe_scene reports for the same element.",
+    ),
 };
 
 export function registerDrawingTools(server: McpServer, deps: RoomAccess): void {
@@ -75,7 +90,7 @@ export function registerDrawingTools(server: McpServer, deps: RoomAccess): void 
     async ({ slug, elements }) => {
       const room = await openRoom(deps, slug);
       const ids = await addElements(room.doc, elements);
-      return answer(slug, room.url, ids, `Drew ${count(ids.length)} on board "${slug}"`);
+      return answer(slug, room.url, room.doc, ids, `Drew ${count(ids.length)} on board "${slug}"`);
     },
   );
 
@@ -96,7 +111,13 @@ export function registerDrawingTools(server: McpServer, deps: RoomAccess): void 
     async ({ slug, patches }) => {
       const room = await openRoom(deps, slug);
       const ids = await updateElements(room.doc, patches);
-      return answer(slug, room.url, ids, `Changed ${count(ids.length)} on board "${slug}"`);
+      return answer(
+        slug,
+        room.url,
+        room.doc,
+        ids,
+        `Changed ${count(ids.length)} on board "${slug}"`,
+      );
     },
   );
 
@@ -116,7 +137,13 @@ export function registerDrawingTools(server: McpServer, deps: RoomAccess): void 
     async ({ slug, ids }) => {
       const room = await openRoom(deps, slug);
       const removed = deleteElements(room.doc, ids);
-      return answer(slug, room.url, removed, `Removed ${count(removed.length)} from "${slug}"`);
+      return answer(
+        slug,
+        room.url,
+        room.doc,
+        removed,
+        `Removed ${count(removed.length)} from "${slug}"`,
+      );
     },
   );
 }
@@ -415,17 +442,53 @@ function count(elements: number): string {
   return `${elements} element${elements === 1 ? "" : "s"}`;
 }
 
+/** The final box of one element a call touched, read back after the write. */
+interface TouchedShape {
+  readonly id: string;
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+}
+
 function answer(
   slug: string,
   url: string,
+  doc: Y.Doc,
   ids: readonly string[],
   summary: string,
 ): {
   content: { type: "text"; text: string }[];
-  structuredContent: { slug: string; url: string; ids: string[] };
+  structuredContent: { slug: string; url: string; ids: string[]; shapes: TouchedShape[] };
 } {
   return {
     content: [{ type: "text", text: `${summary}: ${url}` }],
-    structuredContent: { slug, url, ids: [...ids] },
+    structuredContent: { slug, url, ids: [...ids], shapes: touchedGeometry(doc, ids) },
   };
+}
+
+/**
+ * The final box of each touched element, read back from the document.
+ *
+ * From the stored element rather than from the input skeleton: a container
+ * grows to hold a bound label that outgrew it, so the requested size is a box
+ * that is not on the board. Reading it back is also what makes the geometry
+ * agree with a later `describe_scene`, which reads the same stored element. A
+ * removed id is gone from the document and drops out here.
+ */
+function touchedGeometry(doc: Y.Doc, ids: readonly string[]): TouchedShape[] {
+  const byId = new Map(readScene(elementsOf(doc)).map((element) => [element.id, element]));
+  const shapes: TouchedShape[] = [];
+  for (const id of ids) {
+    const element = byId.get(id);
+    if (element === undefined) continue;
+    shapes.push({
+      id,
+      x: Number(element.x),
+      y: Number(element.y),
+      width: Number(element.width),
+      height: Number(element.height),
+    });
+  }
+  return shapes;
 }

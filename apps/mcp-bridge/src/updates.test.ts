@@ -241,6 +241,42 @@ describe("update_elements", () => {
     expect(JSON.stringify(roomScene(peer.doc))).toBe(before);
   });
 
+  it("reports the post-update box after a move and a relabel (R3)", async () => {
+    const hub = await harness.startHub();
+    const bridge = await harness.connect({ hubPort: hub.port });
+    await bridge.call("create_room", { slug: "alpha" });
+    const peer = await harness.openPeer(hub.url, "alpha");
+
+    await bridge.call("add_elements", {
+      slug: "alpha",
+      elements: [
+        { type: "rectangle", id: "box", x: 0, y: 0, width: 100, height: 60, label: { text: "Hi" } },
+      ],
+    });
+    await waitForCount(peer, 2);
+
+    const sentence = "Authentication service handles login and token refresh";
+    const result = await bridge.call("update_elements", {
+      slug: "alpha",
+      patches: [{ id: "box", x: 400, y: 300, label: { text: sentence } }],
+    });
+
+    expect(result.isError).toBeFalsy();
+    const box = (
+      result.structuredContent as {
+        shapes: { id: string; x: number; y: number; width: number; height: number }[];
+      }
+    ).shapes.find((shape) => shape.id === "box");
+    // The move and the label's grow are both in the reported box.
+    expect(box).toMatchObject({ id: "box", x: 400, y: 300 });
+    expect(Number(box?.height)).toBeGreaterThan(60);
+
+    // And it is the box the room actually stores, read back after the write.
+    await waitFor(() => roomElement(peer.doc, "box")?.x === 400, "the container never moved");
+    expect(Number(box?.width)).toBe(Number(roomElement(peer.doc, "box")?.width));
+    expect(Number(box?.height)).toBe(Number(roomElement(peer.doc, "box")?.height));
+  });
+
   it("refuses a patch naming an id the room does not hold (R6)", async () => {
     const hub = await harness.startHub();
     const bridge = await harness.connect({ hubPort: hub.port });
