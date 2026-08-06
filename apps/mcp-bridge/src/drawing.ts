@@ -67,7 +67,9 @@ const resultShape = {
     .describe(
       "The final box of each element this call touched — after any bound-label grow," +
         " read back from the document. Place the next element against these, not against the" +
-        " sizes requested. Equal to what describe_scene reports for the same element.",
+        " sizes requested. Only the box (x/y/width/height) equals what describe_scene reports" +
+        " for the same element; describe_scene's shapes also carry type, angle, bounds, points" +
+        " and bindings, none of which a draw response returns.",
     ),
 };
 
@@ -128,7 +130,10 @@ export function registerDrawingTools(server: McpServer, deps: RoomAccess): void 
       title: "Remove elements from a board",
       description:
         "Removes elements from a co-canvas board, by id. A container's label goes with it," +
-        " and nothing left behind keeps pointing at what is gone.",
+        " and nothing left behind keeps pointing at what is gone. The `ids` field lists what" +
+        " was removed, labels included; `shapes` is always empty here, since removed elements" +
+        " have no geometry left to read back — do not read that empty `shapes` as nothing" +
+        " having been touched.",
       inputSchema: {
         slug: slugArgument,
         ids: z.array(z.string()).min(1).describe("Ids of the elements to remove."),

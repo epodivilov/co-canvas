@@ -52,7 +52,10 @@ export interface SceneDescription {
    * Every element the text describes, as structured geometry (CC-28).
    *
    * Bound labels are folded into their container, exactly as the text folds
-   * them, so this array lines up one-to-one with what the description names. It
+   * them, so this array holds one entry per element the description names — the
+   * same identities and count. Match an entry to the text by its `id`, not by
+   * position: this array is in document order, while the text's `NODES` section
+   * is sorted into reading order, so the two do not line up index-for-index. It
    * is the same geometry the `GEOMETRY` appendix reports, as data an agent can
    * compute intersections on rather than parse out of prose.
    */
