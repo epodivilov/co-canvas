@@ -48,6 +48,15 @@ export interface SceneSummary {
 export interface SceneDescription {
   readonly text: string;
   readonly summary: SceneSummary;
+  /**
+   * Every element the text describes, as structured geometry (CC-28).
+   *
+   * Bound labels are folded into their container, exactly as the text folds
+   * them, so this array lines up one-to-one with what the description names. It
+   * is the same geometry the `GEOMETRY` appendix reports, as data an agent can
+   * compute intersections on rather than parse out of prose.
+   */
+  readonly shapes: readonly Described[];
 }
 
 /**
@@ -90,8 +99,14 @@ interface Bounds {
   readonly maxY: number;
 }
 
-/** One element, reduced to what the description says about it. */
-interface Described {
+/**
+ * One element, reduced to what the description says about it.
+ *
+ * Surfaced by `describe_scene` as structured geometry (CC-28): the same box the
+ * `GEOMETRY` appendix reports, plus the identity and bindings an agent needs to
+ * lay a board out without overlaps.
+ */
+export interface Described {
   readonly id: string;
   readonly type: string;
   readonly x: number;
@@ -144,7 +159,7 @@ export function describeScene(elements: readonly SceneElement[]): SceneDescripti
     arrows: arrows.length,
     extent: extentOf(described),
   };
-  if (summary.extent === null) return { text: EMPTY_BOARD, summary };
+  if (summary.extent === null) return { text: EMPTY_BOARD, summary, shapes: described };
 
   const grid = buildGrid(summary.extent, nodes);
   const byId = new Map(described.map((element) => [element.id, element]));
@@ -175,6 +190,12 @@ export function describeScene(elements: readonly SceneElement[]): SceneDescripti
       ? []
       : [["CONTAINERS", ...containerLines(frames, groups, held, grid).map(entry)]]),
     ["ARROWS", ...arrows.map((arrow) => entry(arrowLine(arrow, byId)))],
+    // The GEOMETRY appendix and `describe_scene`'s structured `shapes` both
+    // carry each element's box, and that duplication is deliberate. This text is
+    // the CC-9-proven reading format text-only clients depend on and stays
+    // byte-identical (R2); `shapes` is the machine-readable compute surface an
+    // agent lays out from (CC-28). Neither is the other's copy — do not trim
+    // this appendix to "de-duplicate".
     [
       "GEOMETRY (x, y, width, height)",
       ...nodes.map((node) => entry(geometryLine(node))),
@@ -183,7 +204,7 @@ export function describeScene(elements: readonly SceneElement[]): SceneDescripti
     ],
   ];
 
-  return { text: blocks.map((block) => block.join("\n")).join("\n\n"), summary };
+  return { text: blocks.map((block) => block.join("\n")).join("\n\n"), summary, shapes: described };
 }
 
 // ---------------------------------------------------------------------------
@@ -593,9 +614,11 @@ function clamp(value: number, low: number, high: number): number {
  *
  * The document is JSON that a browser and a bridge both write into; a missing
  * width, or a string where a number belongs, must not become the `NaN` R7
- * forbids anywhere in a description.
+ * forbids anywhere in a description. Shared with the draw path (`drawing.ts`
+ * `touchedGeometry`) so a draw response reads a non-finite value back the same
+ * way `describe_scene` does — 0, not `NaN` — and the two never disagree (R4).
  */
-function num(value: unknown): number {
+export function num(value: unknown): number {
   const parsed = typeof value === "number" ? value : Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
 }
