@@ -11,6 +11,7 @@ import type * as Y from "yjs";
 import { z } from "zod";
 import type { BoundRef } from "./convert.ts";
 import { convertSkeletons } from "./convert.ts";
+import { num } from "./describe.ts";
 import type { SceneElement } from "./elements.ts";
 import {
   appendElements,
@@ -475,19 +476,31 @@ function answer(
  * that is not on the board. Reading it back is also what makes the geometry
  * agree with a later `describe_scene`, which reads the same stored element. A
  * removed id is gone from the document and drops out here.
+ *
+ * The scene is re-read once per call rather than threaded through the write.
+ * A draw is not a hot path, and re-reading is the plainest way to guarantee the
+ * geometry is exactly what `describe_scene` would read from the same document.
  */
 function touchedGeometry(doc: Y.Doc, ids: readonly string[]): TouchedShape[] {
   const byId = new Map(readScene(elementsOf(doc)).map((element) => [element.id, element]));
   const shapes: TouchedShape[] = [];
+  const seen = new Set<string>();
   for (const id of ids) {
+    // `update_elements` composes patches, so `ids` can name one element twice;
+    // `describe_scene` reports each element once, and this has to match it. The
+    // returned `ids` array keeps every entry — only the geometry is de-duped.
+    if (seen.has(id)) continue;
+    seen.add(id);
     const element = byId.get(id);
     if (element === undefined) continue;
+    // `num`, the same finite-guard `describe_scene` uses: a non-finite stored
+    // value reads back as 0 on both paths, so they never disagree (R4).
     shapes.push({
       id,
-      x: Number(element.x),
-      y: Number(element.y),
-      width: Number(element.width),
-      height: Number(element.height),
+      x: num(element.x),
+      y: num(element.y),
+      width: num(element.width),
+      height: num(element.height),
     });
   }
   return shapes;

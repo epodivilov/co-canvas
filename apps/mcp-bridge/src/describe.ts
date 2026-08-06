@@ -190,6 +190,12 @@ export function describeScene(elements: readonly SceneElement[]): SceneDescripti
       ? []
       : [["CONTAINERS", ...containerLines(frames, groups, held, grid).map(entry)]]),
     ["ARROWS", ...arrows.map((arrow) => entry(arrowLine(arrow, byId)))],
+    // The GEOMETRY appendix and `describe_scene`'s structured `shapes` both
+    // carry each element's box, and that duplication is deliberate. This text is
+    // the CC-9-proven reading format text-only clients depend on and stays
+    // byte-identical (R2); `shapes` is the machine-readable compute surface an
+    // agent lays out from (CC-28). Neither is the other's copy — do not trim
+    // this appendix to "de-duplicate".
     [
       "GEOMETRY (x, y, width, height)",
       ...nodes.map((node) => entry(geometryLine(node))),
@@ -608,9 +614,11 @@ function clamp(value: number, low: number, high: number): number {
  *
  * The document is JSON that a browser and a bridge both write into; a missing
  * width, or a string where a number belongs, must not become the `NaN` R7
- * forbids anywhere in a description.
+ * forbids anywhere in a description. Shared with the draw path (`drawing.ts`
+ * `touchedGeometry`) so a draw response reads a non-finite value back the same
+ * way `describe_scene` does — 0, not `NaN` — and the two never disagree (R4).
  */
-function num(value: unknown): number {
+export function num(value: unknown): number {
   const parsed = typeof value === "number" ? value : Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
 }

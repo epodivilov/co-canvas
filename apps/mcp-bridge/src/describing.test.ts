@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import * as Y from "yjs";
 import { describeScene } from "./describe.ts";
 import type { SceneElement } from "./elements.ts";
-import { arrow, frame, label, note, rect } from "./scene-helpers.ts";
+import { arrow, frame, label, note, radians, rect } from "./scene-helpers.ts";
 import type { Harness, RoomPeer } from "./test-helpers.ts";
 import { createHarness, hubRooms, settle, textOf, waitFor } from "./test-helpers.ts";
 
@@ -24,6 +24,7 @@ interface Shape {
   startBinding: string | null;
   endBinding: string | null;
   points: { x: number; y: number }[] | null;
+  bounds: { minX: number; minY: number; maxX: number; maxY: number };
 }
 
 function shapesOf(result: { structuredContent?: unknown }): Shape[] {
@@ -112,6 +113,7 @@ describe("describe_scene (R1)", () => {
           startBinding: null,
           endBinding: null,
           points: null,
+          bounds: { minX: 100, minY: 100, maxX: 300, maxY: 200 },
         },
         {
           id: "store",
@@ -128,6 +130,7 @@ describe("describe_scene (R1)", () => {
           startBinding: null,
           endBinding: null,
           points: null,
+          bounds: { minX: 600, minY: 100, maxX: 800, maxY: 200 },
         },
         {
           id: "writes",
@@ -147,6 +150,7 @@ describe("describe_scene (R1)", () => {
             { x: 300, y: 150 },
             { x: 600, y: 150 },
           ],
+          bounds: { minX: 300, minY: 150, maxX: 600, maxY: 150 },
         },
       ],
     });
@@ -236,6 +240,53 @@ describe("describe_scene (R1)", () => {
     const floating = shapes.find((shape) => shape.id === "floating");
     expect(floating?.startBinding).toBeNull();
     expect(floating?.endBinding).toBeNull();
+  });
+
+  it("carries a turned element's rotated footprint and an arrow's rotated points (R1)", async () => {
+    const hub = await harness.startHub();
+    const bridge = await harness.connect({ hubPort: hub.port });
+    await bridge.call("create_room", { slug: "alpha" });
+    const peer = await harness.openPeer(hub.url, "alpha");
+    // A quarter turn about each element's own centre.
+    writeElements(peer, [
+      rect("turned", 0, 0, 200, 100, { angle: radians(90) }),
+      arrow(
+        "skew",
+        0,
+        0,
+        [
+          [0, 0],
+          [100, 0],
+        ],
+        {},
+        { angle: radians(90) },
+      ),
+    ]);
+
+    const result = await bridge.call("describe_scene", { slug: "alpha" });
+    const shapes = shapesOf(result);
+
+    const turned = shapes.find((shape) => shape.id === "turned");
+    expect(turned?.angle).toBeCloseTo(radians(90));
+    // The stored box is untouched — that is the box a caller writes back (R4).
+    expect(turned).toMatchObject({ x: 0, y: 0, width: 200, height: 100 });
+    // `bounds` is the rotated footprint, and for a turned element it differs: a
+    // 200x100 box on a quarter turn spans 100 wide by 200 tall about (100,50).
+    // De-overlap has to test against this, not against the stored box.
+    expect(turned?.bounds?.minX).toBeCloseTo(50);
+    expect(turned?.bounds?.minY).toBeCloseTo(-50);
+    expect(turned?.bounds?.maxX).toBeCloseTo(150);
+    expect(turned?.bounds?.maxY).toBeCloseTo(150);
+    expect(turned?.bounds).not.toEqual({ minX: 0, minY: 0, maxX: 200, maxY: 100 });
+
+    // The arrow's points come out rotated into absolute scene coordinates: a
+    // horizontal segment turned a quarter turn stands vertical.
+    const skew = shapes.find((shape) => shape.id === "skew");
+    expect(skew?.points).toHaveLength(2);
+    expect(skew?.points?.[0]?.x).toBeCloseTo(50);
+    expect(skew?.points?.[0]?.y).toBeCloseTo(-50);
+    expect(skew?.points?.[1]?.x).toBeCloseTo(50);
+    expect(skew?.points?.[1]?.y).toBeCloseTo(50);
   });
 
   it("re-reads the room on every call rather than caching a description", async () => {

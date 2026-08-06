@@ -24,10 +24,14 @@ const extentShape = z.object({
 /**
  * One element's structured geometry (CC-28).
  *
- * The same box the text's `GEOMETRY` appendix reports, plus the identity and
- * bindings an agent computes placement from: it reads topology from the text
- * and computes intersections from this. An arrow carries its endpoints in
+ * The same stored box the text's `GEOMETRY` appendix reports, plus the identity
+ * and bindings an agent computes placement from: it reads topology from the
+ * text and computes intersections from this. An arrow carries its endpoints in
  * absolute scene coordinates, and the ids its ends bind to.
+ *
+ * `x/y/width/height` is the pre-rotation stored box — the one a caller writes
+ * back — while `bounds` is the true rotated footprint. For a turned element the
+ * two differ, and it is `bounds` that de-overlap has to test against.
  */
 const shapeShape = z.object({
   id: z.string().describe("The element's id."),
@@ -53,6 +57,12 @@ const shapeShape = z.object({
     .array(z.object({ x: z.number(), y: z.number() }))
     .nullable()
     .describe("For a linear element, its points in absolute scene coordinates; null otherwise."),
+  bounds: z
+    .object({ minX: z.number(), minY: z.number(), maxX: z.number(), maxY: z.number() })
+    .describe(
+      "The true axis-aligned footprint, rotation applied. Equals the stored box for a flat" +
+        " element and differs for a turned one; test overlaps against this, not x/y/width/height.",
+    ),
 });
 
 /** A `Described` element as the tool reports it — its box, identity and bindings. */
@@ -73,6 +83,12 @@ function toShape(shape: Described): z.infer<typeof shapeShape> {
     endBinding: shape.endBinding,
     points:
       shape.points === null ? null : shape.points.map((point) => ({ x: point.x, y: point.y })),
+    bounds: {
+      minX: shape.bounds.minX,
+      minY: shape.bounds.minY,
+      maxX: shape.bounds.maxX,
+      maxY: shape.bounds.maxY,
+    },
   };
 }
 
