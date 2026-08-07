@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 # Retitle the changesets "Version Packages" PR to list the package it bumps + the new version:
 #
-#   Release: co-canvas@0.2.0
+#   release: co-canvas@0.2.0
 #
 # co-canvas versions one package (`co-canvas`), so this is normally a single entry, but the
 # set is discovered from the PR's own changed files rather than hardcoded — `changeset version`
@@ -15,8 +15,10 @@ set -Eeuo pipefail
 # (which has already pushed the bumped package.json to the PR head) and edits the title via the
 # API. The PR body is left alone — the action fills it with the changelog.
 #
-# The title doubles as the squash-merge commit message. Idempotent — recomputed on every push.
-# CI-only (release.yml).
+# The title doubles as the squash-merge commit message, so it uses the lowercase conventional-commit
+# type `release:` (like the repo's `feat:`/`fix:`) — that keeps the merge subject conventional and
+# lets ci.yml skip its `check` on the release merge by matching `release:`. Idempotent — recomputed
+# on every push. CI-only (release.yml).
 #
 # Usage: title-version-pr.sh <pr-number>
 
@@ -43,7 +45,7 @@ if [ -z "$parts" ]; then
   exit 0
 fi
 
-title="Release:"
+title="release:"
 sep=" "
 while IFS= read -r p; do
   title+="$sep$p"
