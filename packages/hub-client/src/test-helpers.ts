@@ -324,7 +324,27 @@ export async function createScenario(): Promise<Scenario> {
           // Already gone, which is the usual case for the race losers.
         }
       }
-      await rm(root, { recursive: true, force: true });
+
+      // SIGKILL only delivers the signal; it does not wait for the process to
+      // die. A survivor is by design still alive here, and keeps appending its
+      // marker logs under `logDir` while it winds down — so removing `root` now
+      // races a live writer, and a file reappearing between the removal's readdir
+      // and rmdir fails the rmdir with ENOTEMPTY. Wait for every signalled pid to
+      // actually go first. These hubs are detached and reaped by init, so the
+      // poll converges within a few loops; when they are already gone `waitFor`
+      // returns on its first check, so the common teardown pays nothing. The wait
+      // is bounded: a pid that outlives it is left to `rm`'s own retries below
+      // rather than hanging the suite.
+      try {
+        await waitFor(
+          () => [...pids].every((pid) => !isAlive(pid)),
+          "a signalled process outlived teardown",
+          2000,
+        );
+      } catch {
+        // Timed out; fall through to a resilient removal rather than hang.
+      }
+      await rm(root, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 });
     },
   };
 
