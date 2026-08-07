@@ -12,6 +12,14 @@ concurrency:
 
 jobs:
   check:
+    # Skip the check on the Changesets "Version Packages" PR (branch `changeset-release/main`) and
+    # on its squash-merge into main: both re-run the full check for no new signal. The `Release:`
+    # match relies on the squash-title convention — it breaks if the merger hand-edits the subject.
+    if: >-
+      ${{ !(
+        (github.event_name == 'pull_request' && github.head_ref == 'changeset-release/main')
+        || (github.event_name == 'push' && startsWith(github.event.head_commit.message, 'Release:'))
+      ) }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
