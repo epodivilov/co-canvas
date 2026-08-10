@@ -4,6 +4,7 @@
  * and it carries this source bundled inside its own build.
  */
 
+export { type OpenIo, type RunOpenOptions, runOpen } from "./open.ts";
 export { runBridge } from "./run.ts";
 export type { Bridge, BridgeOptions } from "./server.ts";
 export { createBridge } from "./server.ts";

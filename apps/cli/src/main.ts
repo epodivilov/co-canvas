@@ -10,13 +10,14 @@
  * no `@co-canvas/*` at runtime.
  */
 // biome-ignore lint/correctness/useImportExtensions: a package specifier the tsdown alias and tsconfig paths map to the bridge source; an extension would defeat that mapping.
-import { runBridge } from "@co-canvas/mcp-bridge";
+import { runBridge, runOpen } from "@co-canvas/mcp-bridge";
 
 const USAGE = `co-canvas — shared live whiteboard for AI agents and humans
 
 Usage:
-  co-canvas mcp        Run the MCP server over stdio, for an MCP client to spawn.
-  co-canvas help       Show this help.
+  co-canvas open [slug]  Wake the hub and open the room overview — or one board — in your browser.
+  co-canvas mcp          Run the MCP server over stdio, for an MCP client to spawn.
+  co-canvas help         Show this help.
 
 Register it with an MCP client, e.g.:
   claude mcp add co-canvas -- npx -y co-canvas mcp
@@ -30,6 +31,23 @@ async function main(argv: readonly string[]): Promise<void> {
       // stdout is the MCP transport from here on; runBridge writes nothing else to it.
       await runBridge();
       return;
+
+    case "open": {
+      // Unlike `mcp`, stdout here is a human/machine surface: runOpen prints the
+      // overview URL and the room list there, its chatter to stderr. A hub it
+      // cannot wake is the one failure that exits non-zero; a browser that will
+      // not launch on a headless host is not.
+      const [, slug] = argv;
+      try {
+        await runOpen(slug === undefined ? {} : { slug });
+      } catch (error) {
+        process.stderr.write(
+          `co-canvas: ${error instanceof Error ? error.message : String(error)}\n`,
+        );
+        process.exitCode = 1;
+      }
+      return;
+    }
 
     case "help":
     case "--help":
