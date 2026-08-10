@@ -87,10 +87,10 @@ describe("the arrow write path (CC-31)", () => {
         type: "arrow",
         id: "bent",
         points: [
-          [100, 30],
-          [300, 90],
-          [500, 290],
-          [600, 430],
+          { x: 100, y: 30 },
+          { x: 300, y: 90 },
+          { x: 500, y: 290 },
+          { x: 600, y: 430 },
         ],
       },
     ]);
@@ -118,10 +118,10 @@ describe("the arrow write path (CC-31)", () => {
         id: "flow",
         // The terminals sit off both shapes; the interior waypoints are the bend.
         points: [
-          [90, 60],
-          [150, 150],
-          [250, 150],
-          [310, 40],
+          { x: 90, y: 60 },
+          { x: 150, y: 150 },
+          { x: 250, y: 150 },
+          { x: 310, y: 40 },
         ],
         start: { id: "left" },
         end: { id: "right" },
@@ -167,9 +167,9 @@ describe("the arrow write path (CC-31)", () => {
         width: 5,
         height: 5,
         points: [
-          [100, 50],
-          [200, 100],
-          [300, 50],
+          { x: 100, y: 50 },
+          { x: 200, y: 100 },
+          { x: 300, y: 50 },
         ],
       },
     ]);
@@ -180,7 +180,7 @@ describe("the arrow write path (CC-31)", () => {
   });
 
   it("rejects a points array with fewer than two entries (R5)", async () => {
-    await expect(convert([{ type: "arrow", id: "a", points: [[0, 0]] }])).rejects.toThrow();
+    await expect(convert([{ type: "arrow", id: "a", points: [{ x: 0, y: 0 }] }])).rejects.toThrow();
   });
 
   it("rejects a points array carrying a non-finite number (R5)", async () => {
@@ -190,11 +190,34 @@ describe("the arrow write path (CC-31)", () => {
           type: "arrow",
           id: "a",
           points: [
-            [0, 0],
-            [Number.NaN, 10],
+            { x: 0, y: 0 },
+            { x: Number.NaN, y: 10 },
           ],
         },
       ]),
     ).rejects.toThrow();
+  });
+
+  it("guards the points array inside the converter, past the schema (R5)", async () => {
+    // The schema rejects a degenerate array at the tool boundary; this reaches
+    // the converter directly, so the inner guard is what has to catch it.
+    await expect(
+      convertSkeletons([{ type: "arrow", id: "a", points: [{ x: 0, y: 0 }] }] as never, []),
+    ).rejects.toThrow("at least two points");
+    await expect(
+      convertSkeletons(
+        [
+          {
+            type: "arrow",
+            id: "a",
+            points: [
+              { x: 0, y: 0 },
+              { x: Number.POSITIVE_INFINITY, y: 1 },
+            ],
+          },
+        ] as never,
+        [],
+      ),
+    ).rejects.toThrow("finite");
   });
 });

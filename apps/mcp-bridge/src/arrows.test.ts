@@ -201,11 +201,13 @@ describe("arrows", () => {
     await bridge.call("create_room", { slug: "alpha" });
     const peer = await harness.openPeer(hub.url, "alpha");
 
-    const waypoints: [number, number][] = [
-      [100, 30],
-      [300, 90],
-      [500, 290],
-      [600, 430],
+    // The waypoints are written in the very shape describe_scene reports them in,
+    // so the round-trip compares like with like — no reshaping either way.
+    const waypoints = [
+      { x: 100, y: 30 },
+      { x: 300, y: 90 },
+      { x: 500, y: 290 },
+      { x: 600, y: 430 },
     ];
     const result = await bridge.call("add_elements", {
       slug: "alpha",
@@ -227,7 +229,7 @@ describe("arrows", () => {
     // half-pixel bind nudge, imperceptible against the shape.
     expect(reported?.[1]).toEqual({ x: 300, y: 90 });
     expect(reported?.[2]).toEqual({ x: 500, y: 290 });
-    for (const [index, [wx, wy]] of waypoints.entries()) {
+    for (const [index, { x: wx, y: wy }] of waypoints.entries()) {
       expect(Math.abs(Number(reported?.[index]?.x) - wx)).toBeLessThanOrEqual(1);
       expect(Math.abs(Number(reported?.[index]?.y) - wy)).toBeLessThanOrEqual(1);
     }

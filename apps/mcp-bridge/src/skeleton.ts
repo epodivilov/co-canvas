@@ -83,21 +83,22 @@ const endpoint = z
   .describe("A rectangle, ellipse or diamond, in this room or in this same call.");
 
 /**
- * The waypoints a bent arrow runs through, in absolute scene coordinates.
+ * The waypoints a bent arrow runs through, as absolute `{ x, y }` scene points.
  *
- * Absolute — the same frame `describe_scene` reports points in — so an arrow read
- * off a board can be re-routed by writing its points straight back; the bridge
- * turns them into the element's own relative storage. When present they set the
- * arrow's shape and take precedence over `x`/`y`/`width`/`height`, and a bound
- * arrow's first and last points are snapped onto the shapes they join.
+ * The exact shape `describe_scene` reports a linear element's `points` in, so an
+ * arrow read off a board can be re-routed by writing those same points straight
+ * back — no reshaping between read and write. The bridge turns them into the
+ * element's own relative storage. When present they set the arrow's shape and
+ * take precedence over `x`/`y`/`width`/`height`, and a bound arrow's first and
+ * last points are snapped onto the shapes they join.
  */
 const waypoints = z
-  .array(z.tuple([z.number(), z.number()]))
+  .array(z.object({ x: z.number(), y: z.number() }))
   .min(2)
   .describe(
-    "Waypoints as absolute scene `[x, y]` pairs, first to last (two or more)." +
-      " They set the arrow's shape and win over x/y/width/height. A bound arrow's" +
-      " terminals are snapped onto the shapes' edges.",
+    "Waypoints as absolute scene `{ x, y }` points, first to last (two or more)," +
+      " the same shape describe_scene reports. They set the arrow's shape and win" +
+      " over x/y/width/height. A bound arrow's terminals are snapped onto the shapes' edges.",
   );
 
 const shape = z.strictObject({
@@ -181,7 +182,7 @@ export const elementPatchSchema = z.strictObject({
   angle: z.number().optional().describe("Rotation in radians."),
   points: waypoints
     .optional()
-    .describe("New waypoints for an arrow, as absolute scene `[x, y]` pairs. Arrows only."),
+    .describe("New waypoints for an arrow, as absolute scene `{ x, y }` points. Arrows only."),
   text: z.string().min(1).optional().describe("New text. Text elements only."),
   label: z
     .strictObject({ text: z.string().min(1) })

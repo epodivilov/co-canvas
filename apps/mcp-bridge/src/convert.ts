@@ -374,7 +374,7 @@ function routeExplicitPoints(
  */
 export async function rerouteArrow(
   element: SceneElement,
-  points: readonly (readonly [number, number])[],
+  points: readonly { x: number; y: number }[],
   inRoom: ReadonlyMap<string, SceneElement>,
 ): Promise<Rerouted> {
   const startId = element.type === "arrow" ? bindingElementId(element.startBinding) : null;
@@ -437,9 +437,9 @@ export async function rerouteArrow(
  * degenerate arrow past it — and a rejected array throws before anything is
  * written (R5).
  */
-function toAbsolutePoints(points: readonly (readonly [number, number])[]): Point[] {
+function toAbsolutePoints(points: readonly { x: number; y: number }[]): Point[] {
   if (points.length < 2) throw new Error("an arrow needs at least two points");
-  return points.map(([x, y]) => {
+  return points.map(({ x, y }) => {
     if (!Number.isFinite(x) || !Number.isFinite(y)) {
       throw new Error("an arrow's points must all be finite numbers");
     }
