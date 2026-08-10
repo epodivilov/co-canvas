@@ -195,6 +195,44 @@ describe("arrows", () => {
     expect(roomElement(peer.doc, "left")?.boundElements).toBeNull();
   });
 
+  it("authors a bent arrow whose waypoints round-trip through describe_scene (R1)", async () => {
+    const hub = await harness.startHub();
+    const bridge = await harness.connect({ hubPort: hub.port });
+    await bridge.call("create_room", { slug: "alpha" });
+    const peer = await harness.openPeer(hub.url, "alpha");
+
+    const waypoints: [number, number][] = [
+      [100, 30],
+      [300, 90],
+      [500, 290],
+      [600, 430],
+    ];
+    const result = await bridge.call("add_elements", {
+      slug: "alpha",
+      elements: [{ type: "arrow", id: "bent", points: waypoints }],
+    });
+
+    expect(result.isError).toBeFalsy();
+    await waitForCount(peer, 1);
+
+    const described = await bridge.call("describe_scene", { slug: "alpha" });
+    const shapes = (
+      described.structuredContent as {
+        shapes: { id: string; points: { x: number; y: number }[] | null }[];
+      }
+    ).shapes;
+    const reported = shapes.find((shape) => shape.id === "bent")?.points;
+    expect(reported).toHaveLength(4);
+    // Interior waypoints round-trip exactly; the two terminals carry Excalidraw's
+    // half-pixel bind nudge, imperceptible against the shape.
+    expect(reported?.[1]).toEqual({ x: 300, y: 90 });
+    expect(reported?.[2]).toEqual({ x: 500, y: 290 });
+    for (const [index, [wx, wy]] of waypoints.entries()) {
+      expect(Math.abs(Number(reported?.[index]?.x) - wx)).toBeLessThanOrEqual(1);
+      expect(Math.abs(Number(reported?.[index]?.y) - wy)).toBeLessThanOrEqual(1);
+    }
+  });
+
   it("refuses an arrow bound to an id present nowhere (R3, R5)", async () => {
     const hub = await harness.startHub();
     const bridge = await harness.connect({ hubPort: hub.port });

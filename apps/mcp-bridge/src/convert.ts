@@ -267,10 +267,13 @@ function roundnessFor(type: string): { type: number } | null {
 /**
  * Gives a bound arrow endpoints on the shapes it joins.
  *
- * Only when the caller named neither `x` nor `y`: geometry that was asked for
- * is honoured. The endpoints land exactly on the facing edges, and upstream
- * then nudges each of them half a pixel outwards as it binds — which is what
- * puts them outside both shapes and inside the gap it records.
+ * Explicit `points` win over everything: the caller drew a bent polyline and it
+ * is honoured verbatim, only its bound terminals normalised onto the edges.
+ * Otherwise, and only when the caller named neither `x` nor `y`, a straight line
+ * is routed between the two shapes: geometry that was asked for is honoured. The
+ * endpoints land exactly on the facing edges, and upstream then nudges each of
+ * them half a pixel outwards as it binds — which is what puts them outside both
+ * shapes and inside the gap it records.
  */
 function route(
   upstream: SceneElement,
@@ -278,6 +281,10 @@ function route(
   inCall: ReadonlyMap<string, ElementSkeleton>,
   inRoom: ReadonlyMap<string, SceneElement>,
 ): void {
+  if (skeleton.points !== undefined) {
+    routeExplicitPoints(upstream, skeleton, inCall, inRoom);
+    return;
+  }
   if (skeleton.x !== undefined || skeleton.y !== undefined) return;
   if (skeleton.start === undefined || skeleton.end === undefined) {
     throw new Error(
@@ -307,6 +314,202 @@ function route(
     [0, 0],
     [end.x - start.x, end.y - start.y],
   ];
+}
+
+/** A point in scene coordinates. */
+interface Point {
+  readonly x: number;
+  readonly y: number;
+}
+
+/** The geometry, and for a bound arrow the bindings, a re-route writes back. */
+export interface Rerouted {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+  readonly points: number[][];
+  readonly startBinding?: unknown;
+  readonly endBinding?: unknown;
+}
+
+/**
+ * Honours the caller's explicit waypoints for an arrow being authored.
+ *
+ * The points arrive absolute; storage is relative to the element's own `x`/`y`,
+ * so the anchor becomes the first point and the box is the points' extent. A
+ * bound terminal is snapped onto its shape's edge first — the one thing that
+ * keeps `focus` at ~0, so Excalidraw re-derives the same endpoint after the
+ * shape moves rather than letting a bent arrow drift. `start`/`end` stay on
+ * `upstream`, so the converter still binds and records the `focus`/`gap`.
+ */
+function routeExplicitPoints(
+  upstream: SceneElement,
+  skeleton: Extract<ElementSkeleton, { type: "arrow" }>,
+  inCall: ReadonlyMap<string, ElementSkeleton>,
+  inRoom: ReadonlyMap<string, SceneElement>,
+): void {
+  const startBox = skeleton.start === undefined ? null : boxOf(skeleton.start.id, inCall, inRoom);
+  const endBox = skeleton.end === undefined ? null : boxOf(skeleton.end.id, inCall, inRoom);
+  const absolute = normalizeTerminals(toAbsolutePoints(skeleton.points ?? []), startBox, endBox);
+  const frame = polylineFrame(absolute);
+  upstream.x = frame.x;
+  upstream.y = frame.y;
+  upstream.width = frame.width;
+  upstream.height = frame.height;
+  upstream.points = frame.points;
+}
+
+/**
+ * Re-derives a linear element's stored geometry — and, for a bound arrow, its
+ * bindings — for a new set of absolute waypoints.
+ *
+ * The update-path counterpart to `route`: the arrow already exists, so its
+ * bindings name the shapes to keep and the room holds their geometry. A bound
+ * terminal is normalised onto its shape's edge exactly as authoring does, then
+ * the arrow is run back through the converter with real stand-ins for the bound
+ * shapes, so the refreshed `focus`/`gap` are computed the one way the board
+ * agrees with. An unbound linear element needs none of that: its box and
+ * relative points are the whole of the change.
+ */
+export async function rerouteArrow(
+  element: SceneElement,
+  points: readonly (readonly [number, number])[],
+  inRoom: ReadonlyMap<string, SceneElement>,
+): Promise<Rerouted> {
+  const startId = element.type === "arrow" ? bindingElementId(element.startBinding) : null;
+  const endId = element.type === "arrow" ? bindingElementId(element.endBinding) : null;
+  const startBox = startId === null ? null : boxOfRoom(startId, inRoom);
+  const endBox = endId === null ? null : boxOfRoom(endId, inRoom);
+
+  const frame = polylineFrame(normalizeTerminals(toAbsolutePoints(points), startBox, endBox));
+  if (startBox === null && endBox === null) return frame;
+
+  const context: SceneElement[] = [];
+  for (const [id, box] of [
+    [startId, startBox],
+    [endId, endBox],
+  ] as const) {
+    if (id === null || box === null || context.some((seen) => seen.id === id)) continue;
+    context.push({
+      id,
+      type: box.type,
+      x: box.x,
+      y: box.y,
+      width: box.width,
+      height: box.height,
+      angle: box.angle,
+    });
+  }
+  const upstream: SceneElement = {
+    id: element.id,
+    type: "arrow",
+    x: frame.x,
+    y: frame.y,
+    width: frame.width,
+    height: frame.height,
+    points: frame.points,
+    ...(startId !== null ? { start: { id: startId } } : {}),
+    ...(endId !== null ? { end: { id: endId } } : {}),
+  };
+
+  const runtime = await loadExcalidraw();
+  const converted = runtime.convert([...context, upstream]);
+  const rebound = converted.find((candidate) => candidate.id === element.id);
+  if (rebound === undefined) throw new Error(`could not re-route arrow "${element.id}"`);
+
+  return {
+    x: Number(rebound.x),
+    y: Number(rebound.y),
+    width: Number(rebound.width),
+    height: Number(rebound.height),
+    points: rebound.points as number[][],
+    ...(startId !== null ? { startBinding: rebound.startBinding } : {}),
+    ...(endId !== null ? { endBinding: rebound.endBinding } : {}),
+  };
+}
+
+/**
+ * The caller's waypoints as points, guarded.
+ *
+ * The tool schema already rejects a short or non-finite array, but the write
+ * path validates again so a direct caller of the converter cannot slip a
+ * degenerate arrow past it — and a rejected array throws before anything is
+ * written (R5).
+ */
+function toAbsolutePoints(points: readonly (readonly [number, number])[]): Point[] {
+  if (points.length < 2) throw new Error("an arrow needs at least two points");
+  return points.map(([x, y]) => {
+    if (!Number.isFinite(x) || !Number.isFinite(y)) {
+      throw new Error("an arrow's points must all be finite numbers");
+    }
+    return { x, y };
+  });
+}
+
+/**
+ * Snaps a bound arrow's first and last points onto the shapes they join.
+ *
+ * Each terminal moves to where a ray from the shape's centre through the
+ * neighbouring waypoint leaves the outline, so the terminal segment points
+ * straight at the centre — the condition Excalidraw reads back as `focus` ~0.
+ * The neighbour is read from the untouched input, so a two-point arrow, whose
+ * neighbours are the terminals themselves, is normalised against the points the
+ * caller gave rather than against a half-moved endpoint. Interior points pass
+ * through unchanged.
+ */
+function normalizeTerminals(
+  absolute: readonly Point[],
+  startBox: Box | null,
+  endBox: Box | null,
+): Point[] {
+  const points = absolute.map((point) => ({ ...point }));
+  const last = points.length - 1;
+  const startNeighbour = absolute[1];
+  const endNeighbour = absolute[last - 1];
+  if (startBox !== null && startNeighbour !== undefined)
+    points[0] = edgePoint(startBox, startNeighbour);
+  if (endBox !== null && endNeighbour !== undefined) points[last] = edgePoint(endBox, endNeighbour);
+  return points;
+}
+
+/** An absolute polyline as an anchor, relative points and the box that holds them. */
+function polylineFrame(absolute: readonly Point[]): Rerouted {
+  const anchor = absolute[0] ?? { x: 0, y: 0 };
+  const points = absolute.map((point): [number, number] => [
+    point.x - anchor.x,
+    point.y - anchor.y,
+  ]);
+  const xs = points.map(([x]) => x);
+  const ys = points.map(([, y]) => y);
+  return {
+    x: anchor.x,
+    y: anchor.y,
+    width: Math.max(...xs) - Math.min(...xs),
+    height: Math.max(...ys) - Math.min(...ys),
+    points,
+  };
+}
+
+/** The `elementId` of an arrow's stored binding, or `null` when it has none. */
+function bindingElementId(binding: unknown): string | null {
+  if (binding === null || typeof binding !== "object") return null;
+  const id = (binding as { elementId?: unknown }).elementId;
+  return typeof id === "string" ? id : null;
+}
+
+/** The routing box of a room element, or `null` when the room no longer holds it. */
+function boxOfRoom(id: string, inRoom: ReadonlyMap<string, SceneElement>): Box | null {
+  const element = inRoom.get(id);
+  if (element === undefined) return null;
+  return {
+    type: element.type,
+    x: Number(element.x),
+    y: Number(element.y),
+    width: Number(element.width),
+    height: Number(element.height),
+    angle: Number(element.angle ?? 0),
+  };
 }
 
 function boxOf(

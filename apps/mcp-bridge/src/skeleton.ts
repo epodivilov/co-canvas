@@ -82,6 +82,24 @@ const endpoint = z
   .strictObject({ id: z.string().describe("Id of the shape this end attaches to.") })
   .describe("A rectangle, ellipse or diamond, in this room or in this same call.");
 
+/**
+ * The waypoints a bent arrow runs through, in absolute scene coordinates.
+ *
+ * Absolute — the same frame `describe_scene` reports points in — so an arrow read
+ * off a board can be re-routed by writing its points straight back; the bridge
+ * turns them into the element's own relative storage. When present they set the
+ * arrow's shape and take precedence over `x`/`y`/`width`/`height`, and a bound
+ * arrow's first and last points are snapped onto the shapes they join.
+ */
+const waypoints = z
+  .array(z.tuple([z.number(), z.number()]))
+  .min(2)
+  .describe(
+    "Waypoints as absolute scene `[x, y]` pairs, first to last (two or more)." +
+      " They set the arrow's shape and win over x/y/width/height. A bound arrow's" +
+      " terminals are snapped onto the shapes' edges.",
+  );
+
 const shape = z.strictObject({
   type: z.enum(["rectangle", "ellipse", "diamond"]),
   id: z.string().optional().describe("Your own id, kept verbatim so you can refer to it later."),
@@ -119,6 +137,7 @@ const arrow = z.strictObject({
   y: z.number().optional(),
   width: z.number().optional(),
   height: z.number().optional(),
+  points: waypoints.optional().describe("Explicit waypoints; omit to route a straight line."),
   start: endpoint.optional(),
   end: endpoint.optional(),
   label: label.optional(),
@@ -160,6 +179,9 @@ export const elementPatchSchema = z.strictObject({
   width: z.number().positive().optional(),
   height: z.number().positive().optional(),
   angle: z.number().optional().describe("Rotation in radians."),
+  points: waypoints
+    .optional()
+    .describe("New waypoints for an arrow, as absolute scene `[x, y]` pairs. Arrows only."),
   text: z.string().min(1).optional().describe("New text. Text elements only."),
   label: z
     .strictObject({ text: z.string().min(1) })
