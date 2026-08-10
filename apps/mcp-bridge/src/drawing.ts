@@ -50,7 +50,14 @@ const LABEL_FIELDS = [
 
 const slugArgument = z.string().describe("Board slug, e.g. `auth-redesign`.");
 
-const resultShape = {
+/**
+ * The structured output every board-changing tool answers with.
+ *
+ * Shared beyond the three draw tools: the layout tools (CC-21) move elements
+ * through this same path and return this same shape, so an agent reads a place,
+ * an align and a distribute back exactly as it reads a draw.
+ */
+export const resultShape = {
   slug: z.string().describe("The board that changed."),
   url: z.string().describe("URL a browser opens the board at."),
   ids: z.array(z.string()).describe("Ids of the elements this call touched, in order."),
@@ -457,7 +464,14 @@ interface TouchedShape {
   readonly height: number;
 }
 
-function answer(
+/**
+ * Builds a board-changing tool's answer: a text summary and the shared result
+ * shape, its geometry read back from the document after the write.
+ *
+ * Exported for the layout tools (CC-21), which move elements through
+ * `updateElements` and answer in exactly this shape.
+ */
+export function answer(
   slug: string,
   url: string,
   doc: Y.Doc,
