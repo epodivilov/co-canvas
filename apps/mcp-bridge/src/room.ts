@@ -7,7 +7,7 @@
  */
 import type * as Y from "yjs";
 import { boardUrl } from "./board.ts";
-import type { RoomConnections } from "./connections.ts";
+import type { RoomConnection, RoomConnections } from "./connections.ts";
 import type { HubAccess } from "./hub.ts";
 import { acquireHub, listHubRooms } from "./hub.ts";
 import { assertRoomSlug } from "./slug.ts";
@@ -19,10 +19,25 @@ export interface RoomAccess {
   readonly connections: RoomConnections;
 }
 
-/** A room's document, and the URL a browser opens it at. */
+/**
+ * The presence channel a room's connection carries.
+ *
+ * Derived off the connection's provider rather than imported from
+ * `y-protocols` directly, so the tool reaches awareness without the bridge
+ * taking a new direct dependency on a package it only sees transitively.
+ */
+export type RoomAwareness = RoomConnection["provider"]["awareness"];
+
+/** A room's document, the URL a browser opens it at, and its presence channel. */
 export interface OpenedRoom {
   readonly doc: Y.Doc;
   readonly url: string;
+  /**
+   * Remote peers' awareness, including the human's live `selectedElementIds`
+   * (CC-19). y-websocket builds this on the doc by default; `get_selection`
+   * reads the human's selection off it.
+   */
+  readonly awareness: RoomAwareness;
 }
 
 /**
@@ -43,5 +58,9 @@ export async function openRoom(deps: RoomAccess, slug: string): Promise<OpenedRo
     );
   }
   const connection = await deps.connections.open(hub.url, slug);
-  return { doc: connection.doc, url: boardUrl(hub.url, slug) };
+  return {
+    doc: connection.doc,
+    url: boardUrl(hub.url, slug),
+    awareness: connection.provider.awareness,
+  };
 }

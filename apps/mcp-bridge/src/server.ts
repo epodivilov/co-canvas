@@ -9,6 +9,7 @@ import { registerDrawingTools } from "./drawing.ts";
 import type { HubAccess } from "./hub.ts";
 import { acquireHub, listHubRooms } from "./hub.ts";
 import { openInBrowser } from "./opener.ts";
+import { registerSelectionTool } from "./selection.ts";
 import { assertRoomSlug } from "./slug.ts";
 
 export interface BridgeOptions {
@@ -57,7 +58,9 @@ const INSTRUCTIONS =
   " Draw with add_elements, update_elements and delete_elements: everything you draw" +
   " appears in the human's browser at once, without them reloading anything." +
   " Call describe_scene to read a board before changing it — it reports what is there and" +
-  " exactly where, including whatever the human has drawn or moved by hand.";
+  " exactly where, including whatever the human has drawn or moved by hand." +
+  " Call get_selection to read the elements the human has selected right now, so you can act" +
+  " on what they pointed at rather than asking them to name element ids.";
 
 /** Shape of a room in every tool's structured output. */
 const roomShape = {
@@ -195,6 +198,7 @@ export function createBridge(options: BridgeOptions): Bridge {
   // board an agent has drawn on is a board it is already a peer of.
   registerDrawingTools(server, { access, connections });
   registerDescribeTool(server, { access, connections });
+  registerSelectionTool(server, { access, connections });
 
   return {
     server,

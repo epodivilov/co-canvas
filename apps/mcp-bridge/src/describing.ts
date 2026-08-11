@@ -34,7 +34,7 @@ const boxShape = z.object({
  * back — while `bounds` is the true rotated footprint. For a turned element the
  * two differ, and it is `bounds` that de-overlap has to test against.
  */
-const shapeShape = z.object({
+export const shapeShape = z.object({
   id: z.string().describe("The element's id."),
   type: z.string().describe("Its Excalidraw type, e.g. `rectangle` or `arrow`."),
   x: z.number().describe("Left edge of the stored box, in scene units."),
@@ -65,7 +65,7 @@ const shapeShape = z.object({
 });
 
 /** A `Described` element as the tool reports it — its box, identity and bindings. */
-function toShape(shape: Described): z.infer<typeof shapeShape> {
+export function toShape(shape: Described): z.infer<typeof shapeShape> {
   return {
     id: shape.id,
     type: shape.type,

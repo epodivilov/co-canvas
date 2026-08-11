@@ -24,6 +24,7 @@ export const ROOM_TOOLS = [
   "create_room",
   "delete_elements",
   "describe_scene",
+  "get_selection",
   "list_rooms",
   "open_room",
   "update_elements",
