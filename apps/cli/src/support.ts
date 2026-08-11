@@ -21,12 +21,15 @@ import { LATEST_PROTOCOL_VERSION } from "@modelcontextprotocol/sdk/types.js";
 /** The room tools every entry point must expose, in the order assertions read them. */
 export const ROOM_TOOLS = [
   "add_elements",
+  "align_elements",
   "create_room",
   "delete_elements",
   "describe_scene",
+  "distribute_elements",
   "get_selection",
   "list_rooms",
   "open_room",
+  "place_relative",
   "update_elements",
 ] as const;
 

@@ -64,12 +64,15 @@ describe("hub acquisition", () => {
     const tools = await bridge.client.listTools();
     expect(tools.tools.map((tool) => tool.name).sort()).toEqual([
       "add_elements",
+      "align_elements",
       "create_room",
       "delete_elements",
       "describe_scene",
+      "distribute_elements",
       "get_selection",
       "list_rooms",
       "open_room",
+      "place_relative",
       "update_elements",
     ]);
   }, 20_000);
@@ -111,6 +114,6 @@ describe("hub acquisition", () => {
     const second = await bridge.call("list_rooms");
     expect(second.isError).toBe(true);
     const tools = await bridge.client.listTools();
-    expect(tools.tools).toHaveLength(8);
+    expect(tools.tools).toHaveLength(11);
   }, 20_000);
 });

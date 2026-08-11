@@ -8,6 +8,7 @@ import { registerDescribeTool } from "./describing.ts";
 import { registerDrawingTools } from "./drawing.ts";
 import type { HubAccess } from "./hub.ts";
 import { acquireHub, listHubRooms } from "./hub.ts";
+import { registerLayoutTools } from "./layout.ts";
 import { openInBrowser } from "./opener.ts";
 import { registerSelectionTool } from "./selection.ts";
 import { assertRoomSlug } from "./slug.ts";
@@ -60,7 +61,10 @@ const INSTRUCTIONS =
   " Call describe_scene to read a board before changing it — it reports what is there and" +
   " exactly where, including whatever the human has drawn or moved by hand." +
   " Call get_selection to read the elements the human has selected right now, so you can act" +
-  " on what they pointed at rather than asking them to name element ids.";
+  " on what they pointed at rather than asking them to name element ids." +
+  " Position elements without guessing pixels: place_relative puts one next to another with a" +
+  " gap, align_elements shares an edge or centre line across a set, and distribute_elements" +
+  " evens their spacing.";
 
 /** Shape of a room in every tool's structured output. */
 const roomShape = {
@@ -199,6 +203,7 @@ export function createBridge(options: BridgeOptions): Bridge {
   registerDrawingTools(server, { access, connections });
   registerDescribeTool(server, { access, connections });
   registerSelectionTool(server, { access, connections });
+  registerLayoutTools(server, { access, connections });
 
   return {
     server,
