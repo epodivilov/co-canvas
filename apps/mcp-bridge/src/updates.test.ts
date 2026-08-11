@@ -277,6 +277,68 @@ describe("update_elements", () => {
     expect(Number(box?.height)).toBe(Number(roomElement(peer.doc, "box")?.height));
   });
 
+  it("re-routes a bound arrow to new waypoints and refreshes its bindings (R3)", async () => {
+    const hub = await harness.startHub();
+    const bridge = await harness.connect({ hubPort: hub.port });
+    await bridge.call("create_room", { slug: "alpha" });
+    const peer = await harness.openPeer(hub.url, "alpha");
+
+    await bridge.call("add_elements", {
+      slug: "alpha",
+      elements: [
+        { type: "rectangle", id: "left", x: 0, y: 0, width: 100, height: 100 },
+        { type: "rectangle", id: "right", x: 300, y: 0, width: 100, height: 100 },
+        { type: "arrow", id: "flow", start: { id: "left" }, end: { id: "right" } },
+      ],
+    });
+    await waitForCount(peer, 3);
+    // The routed arrow starts life straight: two points.
+    expect(((roomElement(peer.doc, "flow")?.points as unknown[] | undefined) ?? []).length).toBe(2);
+
+    const result = await bridge.call("update_elements", {
+      slug: "alpha",
+      patches: [
+        {
+          id: "flow",
+          points: [
+            { x: 100, y: 50 },
+            { x: 200, y: 200 },
+            { x: 300, y: 50 },
+          ],
+        },
+      ],
+    });
+
+    expect(result.isError).toBeFalsy();
+    await waitFor(
+      () => (roomElement(peer.doc, "flow")?.points as unknown[] | undefined)?.length === 3,
+      "the arrow never adopted the new waypoints",
+    );
+
+    const arrow = roomElement(peer.doc, "flow");
+    const startBinding = arrow?.startBinding as { elementId: string; focus: number } | undefined;
+    const endBinding = arrow?.endBinding as { elementId: string; focus: number } | undefined;
+    // Same shapes, bindings refreshed to the new terminal segments (focus ~0).
+    expect(startBinding).toMatchObject({ elementId: "left" });
+    expect(endBinding).toMatchObject({ elementId: "right" });
+    expect(Math.abs(Number(startBinding?.focus))).toBeLessThan(0.01);
+    expect(Math.abs(Number(endBinding?.focus))).toBeLessThan(0.01);
+    // The box is recomputed from the new waypoints' extent.
+    expect(Number(arrow?.width)).toBeCloseTo(200, 5);
+    expect(Number(arrow?.height)).toBeCloseTo(100, 5);
+
+    const described = await bridge.call("describe_scene", { slug: "alpha" });
+    const shapes = (
+      described.structuredContent as {
+        shapes: { id: string; points: { x: number; y: number }[] | null }[];
+      }
+    ).shapes;
+    const reported = shapes.find((shape) => shape.id === "flow")?.points;
+    expect(reported).toHaveLength(3);
+    // The interior bend the caller asked for is reported back unchanged.
+    expect(reported?.[1]).toEqual({ x: 200, y: 200 });
+  });
+
   it("refuses a patch naming an id the room does not hold (R6)", async () => {
     const hub = await harness.startHub();
     const bridge = await harness.connect({ hubPort: hub.port });

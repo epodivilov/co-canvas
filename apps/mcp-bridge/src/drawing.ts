@@ -10,7 +10,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type * as Y from "yjs";
 import { z } from "zod";
 import type { BoundRef } from "./convert.ts";
-import { convertSkeletons } from "./convert.ts";
+import { convertSkeletons, rerouteArrow } from "./convert.ts";
 import { num } from "./describe.ts";
 import type { SceneElement } from "./elements.ts";
 import {
@@ -255,7 +255,7 @@ async function applyPatch(
   changed: ReadonlyMap<string, SceneElement>,
   byId: ReadonlyMap<string, SceneElement>,
 ): Promise<SceneElement[]> {
-  const { id: _id, label, roundness, text, ...fields } = patch;
+  const { id: _id, label, roundness, text, points, ...fields } = patch;
 
   // A bound label's box is its container's to decide: the position, the
   // wrapping and the size all come out of the container's geometry, and moving
@@ -279,6 +279,31 @@ async function applyPatch(
   }
   if (roundness !== undefined) {
     next.roundness = roundness ? roundnessFor(stored.type) : null;
+  }
+
+  // New waypoints re-route the arrow: the box is recomputed from their extent
+  // and the bindings refreshed to the new terminal segments, rather than the raw
+  // points being copied over a now-stale box (R3). Points win over any
+  // x/y/width/height in the same patch (R4) — they are applied above and
+  // overwritten here. The bound shapes are read through this call's own changes
+  // so an arrow re-routed after a shape it joins was moved sees the shape's new
+  // place.
+  if (points !== undefined) {
+    if (stored.type !== "arrow") {
+      throw new Error(
+        `element "${stored.id}" is a ${stored.type}; only an arrow can be given new points`,
+      );
+    }
+    const room = new Map(byId);
+    for (const [id, element] of changed) room.set(id, element);
+    const rerouted = await rerouteArrow(next, points, room);
+    next.x = rerouted.x;
+    next.y = rerouted.y;
+    next.width = rerouted.width;
+    next.height = rerouted.height;
+    next.points = rerouted.points;
+    if ("startBinding" in rerouted) next.startBinding = rerouted.startBinding;
+    if ("endBinding" in rerouted) next.endBinding = rerouted.endBinding;
   }
 
   const boundTextId = boundRefs(stored).find((ref) => ref.type === "text")?.id;
