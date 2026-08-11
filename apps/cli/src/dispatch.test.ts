@@ -77,19 +77,42 @@ describe("co-canvas subcommand dispatch (R1)", () => {
     expect(result.stderr).toContain("mcp");
   });
 
-  it("writes usage naming `mcp` to stdout and exits zero under --help", async () => {
+  it("writes usage naming `mcp` and `open` to stdout and exits zero under --help", async () => {
     const result = await run("--help");
 
     expect(result.code).toBe(0);
     expect(result.stderr).toBe("");
     expect(result.stdout).toContain("mcp");
+    expect(result.stdout).toContain("open");
     expect(result.stdout.toLowerCase()).toContain("usage");
   });
 
-  it("writes usage to stdout and exits zero under the `help` subcommand", async () => {
+  it("writes usage naming `mcp` and `open` to stdout under the `help` subcommand", async () => {
     const result = await run("help");
 
     expect(result.code).toBe(0);
     expect(result.stdout).toContain("mcp");
+    expect(result.stdout).toContain("open");
   });
+
+  it("routes `open` to the open entry point, which reaches for the hub (R1)", async () => {
+    const port = await freePort();
+    // A port nothing answers on and a hub-start command that cannot spawn: the
+    // wake fails, and only the open route ever tries to wake a hub. A hub error
+    // here — naming the very knobs runOpen surfaces — is proof `open` dispatched
+    // to it rather than being treated as an unknown subcommand.
+    const result = await runToCompletion(process.execPath, [entry, "open"], {
+      HOME: home,
+      CO_CANVAS_HUB_PORT: String(port),
+      CO_CANVAS_HUB_CMD: JSON.stringify([join(home, "there-is-no-hub-here")]),
+      CO_CANVAS_OPEN_CMD: JSON.stringify([join(home, "no-opener-expected")]),
+    });
+
+    expect(result.code).not.toBe(0);
+    // The URL never printed: the wake failed before there was one to print.
+    expect(result.stdout).toBe("");
+    expect(result.stderr).toContain(String(port));
+    expect(result.stderr).toContain("CO_CANVAS_HUB_CMD");
+    expect(result.stderr).not.toContain("unknown subcommand");
+  }, 30_000);
 });
