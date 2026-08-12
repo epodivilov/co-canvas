@@ -1,5 +1,14 @@
 # co-canvas
 
+## 0.3.0
+
+### Minor Changes
+
+- 122b276: Add a `get_selection` tool so the agent can read the elements you've selected on the canvas — "look at what I selected" works without naming element ids.
+- 245f55e: Add layout tools — `place_relative`, `align_elements`, `distribute_elements` — so the agent can position elements relative to each other without overlaps, using true rotated geometry.
+- 3f45bfc: Support bent (multi-point) arrows: `add_elements` and `update_elements` accept an explicit `points` path, and bound arrows keep correct bindings through the bends.
+- b9b4169: Add a `co-canvas open [slug]` command that wakes the hub and opens the room overview (or a specific board) in your browser, printing the URL and room list for headless use.
+
 ## 0.2.1
 
 ### Patch Changes

@@ -1,6 +1,6 @@
 {
   "name": "co-canvas",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "type": "module",
   "description": "Shared live whiteboard for AI agents and humans, as one npx-installable MCP server",
   "license": "MIT",
