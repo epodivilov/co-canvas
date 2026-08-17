@@ -14,6 +14,7 @@ import {
 } from "@co-canvas/protocol";
 import { WebSocket, WebSocketServer } from "ws";
 import { createBoardEndpoints } from "./board-endpoints.ts";
+import { isAllowedOrigin } from "./origin-allowlist.ts";
 import { createPersistence } from "./persistence.ts";
 import { UnsupportedLogVersionError } from "./room-log.ts";
 import { createRoomRegistry } from "./rooms.ts";
@@ -197,6 +198,22 @@ export function createHub(options: HubOptions = {}): Hub {
     const pathname = requestPathname(request.url);
     if (!pathname.startsWith(SYNC_PREFIX)) {
       // An `upgrade` listener owns the socket: simply returning leaks it.
+      socket.destroy();
+      return;
+    }
+
+    // The load-bearing hardening: the sync channel has no per-room auth, so a
+    // browser on any site — which can still reach loopback — would otherwise get
+    // full read+write of a board it names. CORS does not gate WebSockets, so the
+    // Origin has to be checked on the upgrade itself. A present, foreign Origin
+    // is refused before the handshake completes; a missing one is a non-browser
+    // client (the MCP bridge, any Node `ws`) and is left to connect.
+    const origin = request.headers.origin;
+    if (origin !== undefined && !isAllowedOrigin(origin, request.headers.host)) {
+      // Answering the upgrade with a plain 4xx leaves the handshake incomplete,
+      // so the page sees a failed connection rather than an open socket. The
+      // socket is owned here, so it is closed rather than left to leak.
+      socket.write("HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n");
       socket.destroy();
       return;
     }
