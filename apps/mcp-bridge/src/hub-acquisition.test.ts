@@ -73,6 +73,7 @@ describe("hub acquisition", () => {
       "list_rooms",
       "open_room",
       "place_relative",
+      "route_arrow",
       "update_elements",
     ]);
   }, 20_000);
@@ -114,6 +115,6 @@ describe("hub acquisition", () => {
     const second = await bridge.call("list_rooms");
     expect(second.isError).toBe(true);
     const tools = await bridge.client.listTools();
-    expect(tools.tools).toHaveLength(11);
+    expect(tools.tools).toHaveLength(12);
   }, 20_000);
 });
