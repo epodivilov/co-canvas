@@ -65,17 +65,19 @@ export interface JsonResponse {
  *
  * Carries an `Origin` header so the board endpoints' CORS handling is exercised
  * exactly as a browser would exercise it, and returns the headers so a test can
- * assert the cross-origin allowance is on the wire.
+ * assert the cross-origin allowance is on the wire. The origin defaults to the
+ * dev web origin the allowlist trusts; pass `origin` to exercise a foreign one.
  */
 export function sendJson(
   baseUrl: string,
   method: string,
   path: string,
   payload?: unknown,
+  origin = "http://localhost:5173",
 ): Promise<JsonResponse> {
   const { hostname, port } = new URL(baseUrl);
   const data = payload === undefined ? undefined : Buffer.from(JSON.stringify(payload));
-  const headers: Record<string, string | number> = { origin: "http://overview.test" };
+  const headers: Record<string, string | number> = { origin };
   if (data !== undefined) {
     headers["content-type"] = "application/json";
     headers["content-length"] = data.byteLength;
@@ -217,8 +219,13 @@ export interface RawClient {
  * by hand and see exactly which frames the hub sends back — something the
  * `y-websocket` provider hides behind its own handshake.
  */
-export async function openRawClient(baseUrl: string, path: string): Promise<RawClient> {
-  const socket = new WebSocket(`${baseUrl.replace(/^http/, "ws")}${path}`);
+export async function openRawClient(
+  baseUrl: string,
+  path: string,
+  headers?: Record<string, string>,
+): Promise<RawClient> {
+  const target = `${baseUrl.replace(/^http/, "ws")}${path}`;
+  const socket = headers === undefined ? new WebSocket(target) : new WebSocket(target, { headers });
   const frames: Uint8Array[] = [];
   socket.on("message", (data: Buffer | ArrayBuffer | Buffer[]) => {
     frames.push(toBytes(data));

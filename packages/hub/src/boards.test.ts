@@ -296,22 +296,51 @@ describe("board endpoints", () => {
     expect(JSON.parse(rooms.body.toString("utf8"))).toEqual({ rooms: [] });
   });
 
-  it("permits cross-origin reads and writes with CORS headers (R6)", async () => {
+  it("reflects an allowed origin and never answers with * (R4)", async () => {
     const dataDir = await dataDirs.create();
     const url = await hub(dataDir).start();
 
-    const list = await sendJson(url, "GET", "/api/boards");
-    expect(list.headers["access-control-allow-origin"]).toBe("*");
+    // The dev web origin is one the allowlist trusts; the header echoes it back
+    // rather than the wildcard a page on any site could borrow.
+    const list = await sendJson(url, "GET", "/api/boards", undefined, "http://localhost:5173");
+    expect(list.headers["access-control-allow-origin"]).toBe("http://localhost:5173");
+    // A shared cache keyed on the URL alone must not serve one origin's reflected
+    // allowance to another; `Vary: Origin` marks the response as origin-dependent.
+    expect(String(list.headers.vary)).toContain("Origin");
 
     // The preflight a browser sends before a JSON POST/PATCH from another origin.
-    const preflight = await sendJson(url, "OPTIONS", "/api/boards");
+    const preflight = await sendJson(
+      url,
+      "OPTIONS",
+      "/api/boards",
+      undefined,
+      "http://localhost:5173",
+    );
     expect(preflight.status).toBeGreaterThanOrEqual(200);
     expect(preflight.status).toBeLessThan(300);
-    expect(preflight.headers["access-control-allow-origin"]).toBe("*");
+    expect(preflight.headers["access-control-allow-origin"]).toBe("http://localhost:5173");
     expect(String(preflight.headers["access-control-allow-methods"])).toContain("PATCH");
     expect(String(preflight.headers["access-control-allow-headers"]).toLowerCase()).toContain(
       "content-type",
     );
+  });
+
+  it("omits the allow-origin header for a foreign origin (R4)", async () => {
+    const dataDir = await dataDirs.create();
+    const url = await hub(dataDir).start();
+
+    const list = await sendJson(url, "GET", "/api/boards", undefined, "http://evil.example");
+    expect(list.status).toBe(200);
+    expect(list.headers["access-control-allow-origin"]).toBeUndefined();
+
+    const preflight = await sendJson(
+      url,
+      "OPTIONS",
+      "/api/boards",
+      undefined,
+      "http://evil.example",
+    );
+    expect(preflight.headers["access-control-allow-origin"]).toBeUndefined();
   });
 
   // --- Durable metadata (R7) ---

@@ -14,6 +14,7 @@ import {
 } from "@co-canvas/protocol";
 import { WebSocket, WebSocketServer } from "ws";
 import { createBoardEndpoints } from "./board-endpoints.ts";
+import { isAllowedOrigin } from "./origin-allowlist.ts";
 import { createPersistence } from "./persistence.ts";
 import { UnsupportedLogVersionError } from "./room-log.ts";
 import { createRoomRegistry } from "./rooms.ts";
@@ -141,7 +142,13 @@ export function createHub(options: HubOptions = {}): Hub {
   // anything else from watching.
   const peerListeners = new Set<(totalPeers: number) => void>();
   const persistence = createPersistence(dataDir);
-  const boardEndpoints = createBoardEndpoints(persistence);
+  // The port the hub actually bound, known only once `start()` has listened. The
+  // Origin gate pins same-origin to this loopback port rather than the request's
+  // `Host`, so a rebinding page whose `Host` and `Origin` merely agree with each
+  // other cannot pass itself off as the hub's own UI. `null` until the hub has
+  // started, when no same-origin request can arrive anyway.
+  let boundPort: number | null = null;
+  const boardEndpoints = createBoardEndpoints(persistence, () => boundPort);
   const rooms = createRoomRegistry({
     persistence,
     idlePeriodMs,
@@ -197,6 +204,22 @@ export function createHub(options: HubOptions = {}): Hub {
     const pathname = requestPathname(request.url);
     if (!pathname.startsWith(SYNC_PREFIX)) {
       // An `upgrade` listener owns the socket: simply returning leaks it.
+      socket.destroy();
+      return;
+    }
+
+    // The load-bearing hardening: the sync channel has no per-room auth, so a
+    // browser on any site — which can still reach loopback — would otherwise get
+    // full read+write of a board it names. CORS does not gate WebSockets, so the
+    // Origin has to be checked on the upgrade itself. A present, foreign Origin
+    // is refused before the handshake completes; a missing one is a non-browser
+    // client (the MCP bridge, any Node `ws`) and is left to connect.
+    const origin = request.headers.origin;
+    if (origin !== undefined && !isAllowedOrigin(origin, boundPort)) {
+      // Answering the upgrade with a plain 4xx leaves the handshake incomplete,
+      // so the page sees a failed connection rather than an open socket. The
+      // socket is owned here, so it is closed rather than left to leak.
+      socket.write("HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n");
       socket.destroy();
       return;
     }
@@ -311,6 +334,7 @@ export function createHub(options: HubOptions = {}): Hub {
       const address = server.address() as AddressInfo | null;
       if (address === null) throw new Error("hub started but reported no address");
       await persistence.prepare();
+      boundPort = address.port;
       url = `http://${DEFAULT_HOST}:${address.port}`;
       return url;
     } catch (error) {
@@ -336,6 +360,7 @@ export function createHub(options: HubOptions = {}): Hub {
       await persistence.settle();
     } finally {
       url = null;
+      boundPort = null;
     }
   }
 
