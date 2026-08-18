@@ -13,6 +13,24 @@ const DEV_WEB_ORIGINS: ReadonlySet<string> = new Set([
 ]);
 
 /**
+ * Whether the hub's own same-origin UI produced `origin`.
+ *
+ * Pinned to loopback literals on the hub's actual bound port, **not** derived
+ * from the request's `Host` header. Reflecting `Host` would only assert "the
+ * Origin's authority equals the Host the client sent", which a DNS-rebinding
+ * attacker satisfies without forging anything: a page served from
+ * `http://attacker.example:PORT`, once `attacker.example` is rebound to
+ * `127.0.0.1`, sends an `Origin` and a `Host` that agree with each other and
+ * would pass an equality check — while being a foreign origin. Anchoring to
+ * loopback literals closes that: `127.0.0.1` is an IP literal an attacker cannot
+ * rebind, and browsers and the OS resolve `localhost` to loopback by rule, so
+ * neither can ever be an attacker's authority.
+ */
+function isHubOwnOrigin(origin: string, hubPort: number): boolean {
+  return origin === `http://127.0.0.1:${hubPort}` || origin === `http://localhost:${hubPort}`;
+}
+
+/**
  * Whether a browser request carrying `origin` may talk to the hub.
  *
  * The hub binds loopback, but a browser can still reach loopback, and neither
@@ -20,21 +38,19 @@ const DEV_WEB_ORIGINS: ReadonlySet<string> = new Set([
  * visits could open a socket to a board it names or read the board list. This
  * gate refuses a present, foreign `Origin`.
  *
- * Two origins pass. The hub's own: production serves the SPA itself, so the page
- * and its socket share an origin, recognised by reflecting the `host` the client
- * actually dialed (a browser sets `Host` to the server and `Origin` to the page;
- * a foreign page cannot forge either for a real cross-origin request, so a match
- * is genuinely same-origin). And the dev web origin: Vite serves the page
- * cross-origin during `pnpm dev`.
+ * Two origins pass. The hub's own — production serves the SPA itself, so the
+ * page and its socket share the hub's loopback origin ({@link isHubOwnOrigin},
+ * pinned to the bound port). And the dev web origin — Vite serves the page
+ * cross-origin during `pnpm dev`. `hubPort` is the port the hub actually bound;
+ * it is `null` before the hub has started, when no same-origin request can
+ * arrive anyway.
  *
  * A request with **no** `Origin` is not judged here — that is a non-browser
  * client (the MCP bridge, any Node `ws`), which a browser drive-by cannot
  * impersonate; callers allow it explicitly.
  */
-export function isAllowedOrigin(origin: string, host: string | undefined): boolean {
+export function isAllowedOrigin(origin: string, hubPort: number | null): boolean {
   if (DEV_WEB_ORIGINS.has(origin)) return true;
-  if (host !== undefined && (origin === `http://${host}` || origin === `https://${host}`)) {
-    return true;
-  }
+  if (hubPort !== null && isHubOwnOrigin(origin, hubPort)) return true;
   return false;
 }

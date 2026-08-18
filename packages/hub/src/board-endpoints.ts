@@ -21,14 +21,14 @@ const CORS_ALLOWED_HEADERS = "content-type";
  * board list and drive the create / rename / archive operations. `Vary: Origin`
  * keeps a cache from serving one origin's answer to another.
  */
-function corsHeaders(request: IncomingMessage): Record<string, string> {
+function corsHeaders(request: IncomingMessage, hubPort: number | null): Record<string, string> {
   const headers: Record<string, string> = {
     "access-control-allow-methods": CORS_METHODS,
     "access-control-allow-headers": CORS_ALLOWED_HEADERS,
     vary: "Origin",
   };
   const origin = request.headers.origin;
-  if (origin !== undefined && isAllowedOrigin(origin, request.headers.host)) {
+  if (origin !== undefined && isAllowedOrigin(origin, hubPort)) {
     headers["access-control-allow-origin"] = origin;
   }
   return headers;
@@ -49,11 +49,14 @@ export type BoardEndpoints = (
   pathname: string,
 ) => Promise<boolean>;
 
-export function createBoardEndpoints(persistence: Persistence): BoardEndpoints {
+export function createBoardEndpoints(
+  persistence: Persistence,
+  getHubPort: () => number | null,
+): BoardEndpoints {
   return async (request, response, pathname) => {
     if (pathname !== API_PREFIX && !pathname.startsWith(`${API_PREFIX}/`)) return false;
 
-    const cors = corsHeaders(request);
+    const cors = corsHeaders(request, getHubPort());
 
     const method = request.method ?? "GET";
     if (method === "OPTIONS") {

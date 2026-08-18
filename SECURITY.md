@@ -37,9 +37,13 @@ background. Two measures close that browser drive-by:
   web page full read+write of a board it names. The hub refuses a WebSocket
   handshake whose `Origin` is present and not on its allowlist. The allowlist is
   the hub's own origin (the production UI, which the hub serves itself) and the
-  local dev web origin (Vite). A request with no `Origin` header is allowed,
-  because that is how a non-browser client connects (the MCP bridge, or any other
-  local tool) and a hostile web page cannot suppress the header a browser adds.
+  local dev web origin (Vite). The hub's own origin is pinned to its loopback
+  bind — `127.0.0.1` or `localhost` on the port the hub actually bound — never
+  reconstructed from the request's `Host` header, so a page cannot talk the hub
+  into treating a foreign origin as same-origin (see DNS rebinding below). A
+  request with no `Origin` header is allowed, because that is how a non-browser
+  client connects (the MCP bridge, or any other local tool) and a hostile web
+  page cannot suppress the header a browser adds.
 - **Narrowed CORS on the board API.** The board API (`/api/boards`) reflects an
   allowed request origin only; it never answers `Access-Control-Allow-Origin: *`.
   A page on an untrusted origin therefore cannot read the board list or drive the
@@ -58,6 +62,13 @@ which is the local-trust property described above, not a browser-reachable leak.
 - The measures above stop a **browser** on an untrusted origin. They do not stop
   a native process running on the same machine — that is outside the trust
   boundary by design.
+
+DNS rebinding against the sync or board origin is **defended, not residual**.
+Same-origin is pinned to the hub's own loopback bind (`127.0.0.1` / `localhost`
+on the bound port), never to the request's `Host`. A page served from
+`http://attacker.example:PORT` that rebinds `attacker.example` to `127.0.0.1`
+still carries a foreign `Origin`, which matches neither loopback literal — so
+both the WebSocket upgrade and the board-API CORS reflection refuse it.
 
 ## Reporting a vulnerability
 

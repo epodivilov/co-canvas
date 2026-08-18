@@ -304,6 +304,9 @@ describe("board endpoints", () => {
     // rather than the wildcard a page on any site could borrow.
     const list = await sendJson(url, "GET", "/api/boards", undefined, "http://localhost:5173");
     expect(list.headers["access-control-allow-origin"]).toBe("http://localhost:5173");
+    // A shared cache keyed on the URL alone must not serve one origin's reflected
+    // allowance to another; `Vary: Origin` marks the response as origin-dependent.
+    expect(String(list.headers.vary)).toContain("Origin");
 
     // The preflight a browser sends before a JSON POST/PATCH from another origin.
     const preflight = await sendJson(
