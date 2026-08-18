@@ -5,6 +5,27 @@
   "description": "Shared live whiteboard for AI agents and humans, as one npx-installable MCP server",
   "license": "MIT",
   "author": "Evgenii Podivilov",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/epodivilov/co-canvas.git"
+  },
+  "homepage": "https://github.com/epodivilov/co-canvas#readme",
+  "bugs": {
+    "url": "https://github.com/epodivilov/co-canvas/issues"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "whiteboard",
+    "excalidraw",
+    "ai-agent",
+    "canvas",
+    "collaboration",
+    "claude"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
   "bin": {
     "co-canvas": "./dist/main.js"
   },
