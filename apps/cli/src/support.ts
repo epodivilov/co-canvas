@@ -30,6 +30,7 @@ export const ROOM_TOOLS = [
   "list_rooms",
   "open_room",
   "place_relative",
+  "route_arrow",
   "update_elements",
 ] as const;
 

@@ -10,6 +10,7 @@ import type { HubAccess } from "./hub.ts";
 import { acquireHub, listHubRooms } from "./hub.ts";
 import { registerLayoutTools } from "./layout.ts";
 import { openInBrowser } from "./opener.ts";
+import { registerRouteTool } from "./route.ts";
 import { registerSelectionTool } from "./selection.ts";
 import { assertRoomSlug } from "./slug.ts";
 
@@ -64,7 +65,8 @@ const INSTRUCTIONS =
   " on what they pointed at rather than asking them to name element ids." +
   " Position elements without guessing pixels: place_relative puts one next to another with a" +
   " gap, align_elements shares an edge or centre line across a set, and distribute_elements" +
-  " evens their spacing.";
+  " evens their spacing. Connect two shapes with route_arrow for a clean right-angled arrow" +
+  " whose bend is worked out for you.";
 
 /** Shape of a room in every tool's structured output. */
 const roomShape = {
@@ -204,6 +206,7 @@ export function createBridge(options: BridgeOptions): Bridge {
   registerDescribeTool(server, { access, connections });
   registerSelectionTool(server, { access, connections });
   registerLayoutTools(server, { access, connections });
+  registerRouteTool(server, { access, connections });
 
   return {
     server,
