@@ -1,5 +1,18 @@
 # co-canvas
 
+## 0.4.0
+
+### Minor Changes
+
+- a66a65e: Add `route_arrow`: draws an orthogonal, single-elbow arrow between two bound shapes, working out the bend from their relative position so a bound arrow comes out clean without the agent guessing waypoints. It authors a new arrow or re-routes an existing bound one, keeps every segment axis-aligned, and clears its own two endpoint shapes.
+
+### Patch Changes
+
+- 0a0c843: Add npm metadata (`repository`, `homepage`, `bugs`, `keywords`, `engines.node`) so the published
+  package page links back to `github.com/epodivilov/co-canvas` and is discoverable by keyword. Also
+  adds a root `LICENSE` file and `CONTRIBUTING.md` ahead of making the repo public.
+- 01f3cf8: Harden the local hub against a browser drive-by: the WebSocket sync upgrade now rejects a handshake whose `Origin` is present and not on the allowlist (the hub's own origin and the dev web origin), the board API reflects an allowed origin instead of `*`, and a new `SECURITY.md` documents the loopback trust model and how to report a vulnerability. Non-browser clients that send no `Origin` (the MCP bridge) keep connecting unchanged.
+
 ## 0.3.0
 
 ### Minor Changes
