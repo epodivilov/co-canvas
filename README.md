@@ -1,8 +1,6 @@
 # co-canvas
 
-![A co-canvas board connecting Client, API, Database and Cache](.github/assets/hero-board.png)
-
-[Watch the live demo: agent draws, human moves the API, agent reads the edit and adds Cache](.github/assets/live-loop.webm)
+https://github.com/user-attachments/assets/1b327d1e-cb6c-4046-8974-fd381b86d39a
 
 A live whiteboard your AI agent and you share — the agent draws, you edit, both on the same board, running on your machine.
 

@@ -277,17 +277,10 @@ async function main() {
     await pause(3200);
 
     await mkdir(outputDir, { recursive: true });
-    await page.locator("#demo-call-log").evaluate((element) => {
-      element.style.display = "none";
-    });
-    await page.screenshot({
-      path: resolve(outputDir, "hero-board.png"),
-      clip: { x: 365, y: 130, width: 1040, height: 650 },
-    });
     await context.close();
     context = null;
     await rename(await page.video().path(), resolve(outputDir, "live-loop.webm"));
-    console.log(`Recorded ${resolve(outputDir, "live-loop.webm")} and hero-board.png`);
+    console.log(`Recorded ${resolve(outputDir, "live-loop.webm")}`);
   } finally {
     await client?.close();
     await context?.close();
