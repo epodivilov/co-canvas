@@ -1,5 +1,9 @@
 # co-canvas
 
+![A co-canvas board connecting Client, API, Database and Cache](.github/assets/hero-board.png)
+
+[Watch the live demo: agent draws, human moves the API, agent reads the edit and adds Cache](.github/assets/live-loop.webm)
+
 A live whiteboard your AI agent and you share — the agent draws, you edit, both on the same board, running on your machine.
 
 co-canvas is an MCP server that hands an AI agent a real Excalidraw board. The agent opens a board, it shows up in your browser; the agent draws on it and you edit it by hand, and every change lands on both sides at once. Nothing leaves your machine — the hub and your boards run locally under `~/.co-canvas`.
